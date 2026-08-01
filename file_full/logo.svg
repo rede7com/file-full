@@ -1,0 +1,35 @@
+<svg viewBox="0 0 250 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#29B6F6"/>
+      <stop offset="100%" stop-color="#0D47A1"/>
+    </linearGradient>
+    <linearGradient id="folderGrad2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E3F2FD"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="6" y="6" width="88" height="88" rx="20" fill="url(#bg2)"/>
+
+  <path d="M20 40
+           a6 6 0 0 1 6-6
+           h14 l6 7 h28
+           a6 6 0 0 1 6 6
+           v25
+           a6 6 0 0 1 -6 6
+           H26
+           a6 6 0 0 1 -6-6
+           Z"
+        transform="translate(6,4)"
+        fill="url(#folderGrad2)" stroke="#0D47A1" stroke-width="2"/>
+
+  <g transform="translate(58,52)">
+    <rect x="0" y="0" width="30" height="24" rx="4" fill="#0D47A1" stroke="#FFFFFF" stroke-width="2"/>
+    <circle cx="15" cy="12" r="6.5" fill="#29B6F6" stroke="#FFFFFF" stroke-width="1.5"/>
+    <circle cx="15" cy="12" r="1.8" fill="#FFFFFF"/>
+  </g>
+
+  <text x="108" y="48" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#0D47A1">File Manager</text>
+  <text x="108" y="72" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="400" fill="#546E7A">HD Externo &amp; Config</text>
+</svg>

@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bashio
+if bashio::config.true 'time_machine_enabled'; then
+    bashio::log.info "Iniciando Avahi (mDNS/Bonjour) para Time Machine..."
+    exec avahi-daemon --no-chroot -f /etc/avahi/avahi-daemon.conf
+else
+    while true; do sleep 3600; done
+fi

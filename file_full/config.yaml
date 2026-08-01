@@ -1,0 +1,113 @@
+name: "File Manager HD PHP"
+version: "2026-1.1.0"
+slug: file_full
+description: "Gerenciador de arquivos PHP, com acesso ao /config e HDs Externos"
+url: "https://rede7.com.br"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+startup: services
+boot: auto
+init: false
+
+# Necessário para enxergar /dev e montar o disco dentro do container.
+# full_access dá acesso aos dispositivos; SYS_ADMIN é a capability que o
+# próprio syscall mount() exige (sem ela dá "permission denied" mesmo com full_access).
+full_access: true
+privileged:
+  - SYS_ADMIN
+apparmor: false
+
+# Permite chamar a API do Home Assistant Core (via proxy do Supervisor, em
+# http://supervisor/core/api/) usando o token SUPERVISOR_TOKEN que já vem
+# injetado automaticamente — usado pra criar notificações (disco cheio,
+# problema de SMART, etc).
+homeassistant_api: true
+
+# Expõe a UI dentro do próprio Home Assistant, com autenticação
+# via sessão do usuário logado (não precisa expor porta nem Basic Auth).
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:folder-multiple
+panel_title: File Manager HD PHP
+
+# Disponibiliza a pasta de configuração do HA dentro do container em /config.
+# Não fica visível no gerenciador de arquivos por padrão — só se a flag
+# expose_ha_config estiver ligada (ver options abaixo). addon_config removido
+# de propósito: a documentação do HA não permite ele e "config" juntos no
+# mesmo map (addon_config é uma pasta privada só deste add-on, diferente do
+# /config real do HA que já usamos).
+#
+# all_addon_configs:rw tem um segundo uso além de expose_addon_configs: é
+# onde o próprio add-on guarda seus dados persistentes (usuários, senha,
+# configurações) em /addon_configs/file_full — pasta que ENTRA no backup do
+# HA (diferente de /data, que sobrevive a updates mas fica fora do backup).
+map:
+  - config:rw
+  - homeassistant_config:rw
+  - ssl:rw
+  - all_addon_configs:rw
+  - addons:rw
+  - share:rw
+  - backup:rw
+  - media:rw
+
+# Necessário pro Avahi anunciar o compartilhamento na rede local via mDNS —
+# multicast não atravessa a rede isolada padrão do Docker, só funciona com a
+# própria stack de rede do host. Efeito colateral: a porta 445 (SMB) passa a
+# escutar direto na rede do host (mesmo mecanismo que o add-on Samba oficial
+# usa) — não tem outro jeito de fazer o Mac descobrir o Time Machine sozinho.
+host_network: true
+
+options:
+  # Cada item aceita dois formatos:
+  #   "NOME"                              -> identifica o disco pelo label (como sempre)
+  #   "uuid:XXXX-YYYY"                     -> identifica pelo UUID (útil se dois discos
+  #                                           tiverem o mesmo label — UUID nunca colide;
+  #                                           veja o UUID com `blkid` via SSH no host)
+  #   "uuid:XXXX-YYYY:Nome Amigável"       -> por UUID, mas com nome de pasta customizado
+  disk_labels:
+    - "HD_EXTERNO"
+  fs_type: "auto"
+  expose_ha_config: false
+  expose_addons: false
+  expose_backup: false
+  expose_addon_configs: false
+  monitor_enabled: true
+  monitor_interval_minutes: 30
+  disk_usage_alert_percent: 90
+  # URL https:// de um .zip com a atualização (config.yaml e www/ na raiz do
+  # zip, sem pasta extra por cima). Opcionalmente, um arquivo <mesma URL>.sha256
+  # ao lado é conferido antes de aplicar, se existir.
+  update_source_url: ""
+  # Time Machine: desligado por padrão. time_machine_disk aceita o mesmo
+  # formato de disk_labels ("NOME" ou "uuid:XXXX-YYYY[:nome]") — NÃO precisa
+  # também estar em disk_labels, o Time Machine monta esse disco sozinho. O
+  # disco INTEIRO fica dedicado só ao Time Machine (não é uma subpasta dentro
+  # de um disco de uso geral, pra não misturar backup com arquivos comuns).
+  # Usuário/senha aqui são exclusivos do SMB, diferentes do login web.
+  time_machine_enabled: false
+  time_machine_disk: ""
+  time_machine_username: "timemachine"
+  time_machine_password: ""
+  time_machine_max_size_gb: 0
+
+schema:
+  disk_labels:
+    - str
+  fs_type: "list(auto|ext4|ntfs-3g|exfat)"
+  expose_ha_config: bool
+  expose_addons: bool
+  expose_backup: bool
+  expose_addon_configs: bool
+  monitor_enabled: bool
+  monitor_interval_minutes: "int(5,1440)"
+  disk_usage_alert_percent: "int(50,99)"
+  update_source_url: "str"
+  time_machine_enabled: bool
+  time_machine_disk: "str"
+  time_machine_username: "str"
+  time_machine_password: "password"
+  time_machine_max_size_gb: "int(0,100000)"
