@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bashio
 # ==============================================================================
 # Monta um ou mais HDs externos por LABEL antes do servidor PHP subir.
-# Cada disco é montado em /mnt/hd_externo/<label>, de forma que todos
+# Cada disco é montado em /mnt/file_full/<label>, de forma que todos
 # aparecem como subpastas dentro da raiz vista pelo gerenciador de arquivos.
 #
 # Filosofia: nada aqui derruba o container inteiro. Se um disco falhar (ou
@@ -10,7 +10,7 @@
 # problema fica registrado no log, mas não trava o resto.
 # ==============================================================================
 
-ROOT_MOUNT="/mnt/hd_externo"
+ROOT_MOUNT="/mnt/file_full"
 FS_TYPE=$(bashio::config 'fs_type')
 MOUNTED_ANY_DISK=0
 

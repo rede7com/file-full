@@ -57,9 +57,17 @@ RUN { \
 
 COPY rootfs /
 COPY www/ /var/www/html/
+COPY config.yaml /opt/config.yaml
+
+# 01-install-persistent-source.sh compara essa versão (gravada na imagem, na
+# hora do build) com a que já está instalada em /addon_configs/file_full pra
+# saber se precisa reinstalar o código depois de um update. Sem isso, ele
+# nunca saberia que uma nova versão chegou.
+RUN grep '^version:' /opt/config.yaml | sed -E 's/version:[[:space:]]*"?([^"]*)"?/\1/' > /opt/addon_version.txt \
+    && cat /opt/addon_version.txt
 
 RUN chmod a+x /etc/cont-init.d/00-mount-disk.sh \
-    && chmod a+x /etc/cont-init.d/01-bind-live-source.sh \
+    && chmod a+x /etc/cont-init.d/01-install-persistent-source.sh \
     && chmod a+x /etc/cont-init.d/02-persist-data.sh \
     && chmod a+x /etc/cont-init.d/03-setup-smb.sh \
     && chmod a+x /etc/services.d/webserver/run \

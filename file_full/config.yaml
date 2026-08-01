@@ -1,5 +1,5 @@
 name: "File Manager HD PHP"
-version: "2026-1.2.0"
+version: "2026-1.2.1"
 slug: file_full
 description: "Gerenciador de arquivos PHP, com acesso ao /config e HDs Externos"
 url: "https://rede7.com.br"
@@ -91,7 +91,7 @@ options:
   time_machine_password: ""
   time_machine_max_size_gb: 0
   # SMB de uso geral: desligado por padrão. Compartilha os mesmos discos
-  # visíveis no gerenciador (disk_labels, via /mnt/hd_externo) — diferente do
+  # visíveis no gerenciador (disk_labels, via /mnt/file_full) — diferente do
   # Time Machine, que é um disco inteiro dedicado só a isso. Usuário/senha
   # aqui são exclusivos do SMB, diferentes do login web e do Time Machine.
   smb_enabled: false

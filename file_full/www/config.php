@@ -30,7 +30,7 @@ if (!is_dir(THUMB_CACHE_DIR)) {
 
 // Diretório raiz onde os arquivos gerenciados ficam armazenados: o HD externo
 // montado pelo script 00-mount-disk.sh. Cada disco aparece como subpasta aqui.
-define('BASE_DIR', realpath('/mnt/hd_externo'));
+define('BASE_DIR', realpath('/mnt/file_full'));
 
 // Tamanho máximo de upload por arquivo (ajuste conforme php.ini: upload_max_filesize / post_max_size)
 define('MAX_UPLOAD_SIZE', 8 * 1024 * 1024 * 1024); // 8 GB

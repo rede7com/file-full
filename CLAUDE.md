@@ -18,10 +18,10 @@ file_full/
 ├── icon.png / logo.png   ← galeria do HA
 ├── rootfs/etc/
 │   ├── cont-init.d/       ← scripts de boot, em ordem numérica
-│   │   ├── 00-mount-disk.sh        ← monta disk_labels, expõe /config etc (flags)
-│   │   ├── 01-bind-live-source.sh  ← bind-mount de /addons/file_full/www sobre /var/www/html
-│   │   ├── 02-persist-data.sh      ← migra /data → /addon_configs/file_full (1x)
-│   │   └── 03-setup-smb.sh         ← smb.conf + avahi p/ [Arquivos] (smb_enabled) e [TimeMachine] (time_machine_enabled)
+│   │   ├── 00-mount-disk.sh              ← monta disk_labels, expõe /config etc (flags)
+│   │   ├── 01-install-persistent-source.sh ← instala www/ em /addon_configs/file_full, bind-mount sobre /var/www/html
+│   │   ├── 02-persist-data.sh            ← migra /data → /addon_configs/file_full (1x)
+│   │   └── 03-setup-smb.sh               ← smb.conf + avahi p/ [Arquivos] (smb_enabled) e [TimeMachine] (time_machine_enabled)
 │   └── services.d/        ← processos de longa duração (s6)
 │       ├── webserver/     ← php83 -S (não Apache — ver "Decisões" abaixo)
 │       ├── monitor/       ← loop de checagem de espaço/SMART, notifica no HA
@@ -41,11 +41,18 @@ file_full/
   permissão sem mudar dono real) — pacote não existe no Alpine 3.19, por isso
   a solução final é "roda como root" em vez disso.
 
-- **`www/` é bind-mount ao vivo de `/addons/file_full/www`** (não `COPY` fixo
-  no build), graças a `map: - addons:rw`. Mudança em PHP vale na próxima
-  requisição, sem rebuild. Dockerfile/rootfs continuam exigindo rebuild
-  manual (isso é inerente ao Docker). Fallback: se a pasta ao vivo não
-  existir, cai no conteúdo copiado no build (nunca quebra por isso).
+- **`www/` fica instalado em `/addon_configs/file_full/www`** (bind-mount
+  sobre `/var/www/html`), não mais um bind direto de `/addons/file_full/www`.
+  O bind direto só funcionava em instalação local (`map: addons` não alcança
+  o código clonado numa instalação por repositório git, que é o caso hoje).
+  `01-install-persistent-source.sh` compara a versão gravada em
+  `/opt/addon_version.txt` (extraída do `config.yaml` em build time, ver
+  `Dockerfile`) com um marcador em `/addon_configs/file_full/.installed_version`
+  — se mudou, reinstala a partir do conteúdo da imagem; se não mudou, preserva
+  o que já está lá (permite editar direto por SSH/File Editor sem perder na
+  próxima subida). **Cuidado**: sem o `Dockerfile` gerar `/opt/addon_version.txt`
+  de verdade, essa comparação quebra silenciosamente (fica sempre "unknown" e
+  nunca mais reinstala) — já aconteceu uma vez, ver "Armadilhas" abaixo.
 
 - **Dados persistentes ficam em `/addon_configs/file_full`**, não em `/data`.
   `/data` sobrevive a updates mas **não entra no backup do HA**;
@@ -55,8 +62,9 @@ file_full/
   dois juntos no `map:`).
 
 - **BASE_DIR (arquivos gerenciados) fica fora do DocumentRoot** —
-  `/mnt/hd_externo`, não dentro de `www/`. Por isso upload de `.php` não é
+  `/mnt/file_full`, não dentro de `www/`. Por isso upload de `.php` não é
   bloqueado: não tem rota HTTP até lá, não é executável mesmo enviado.
+  (Renomeado de `/mnt/hd_externo` pra `/mnt/file_full` — padrão do nome do add-on.)
 
 - **Formatação de disco protege `hassos-*` e `zram*` por padrão** — nunca
   aparecem na lista, backend rejeita mesmo em requisição direta (não confia
@@ -74,7 +82,7 @@ file_full/
   só ligavam com `time_machine_enabled`, e o `smb.conf` só tinha o
   compartilhamento `[TimeMachine]`. Agora `03-setup-smb.sh` também escreve um
   `[Arquivos]` (`smb_enabled`/`smb_username`/`smb_password`) apontando pro
-  mesmo `/mnt/hd_externo` que o gerenciador de arquivos usa — os dois
+  mesmo `/mnt/file_full` que o gerenciador de arquivos usa — os dois
   compartilhamentos coexistem (usuários SMB diferentes, mesmo `smb.conf`).
   `samba/run` e `avahi/run` ligam se qualquer um dos dois flags estiver ativo.
   O anúncio Avahi do `[Arquivos]` só publica `_smb._tcp` genérico; os registros
@@ -85,12 +93,8 @@ file_full/
 
 - **Autoatualização é só a nativa do HA agora** (Update na Add-on Store, já
   que o repo virou git). O botão de atualização manual dentro do próprio app
-  (`update_source_url`, baixa zip HTTPS + checksum `.sha256` opcional +
-  backup automático) existia de quando o projeto ainda não estava hospedado
-  — foi removido (código em `www/api.php`, `www/assets/js/app.js`,
-  `www/includes/functions.php` e a opção em `config.yaml`) porque virou
-  caminho redundante depois que o Supervisor passou a detectar updates
-  sozinho pela versão do `config.yaml`.
+  existia de quando o projeto ainda não estava hospedado no GitHub — foi
+  removido por virar caminho redundante.
 
 ## Armadilhas já resolvidas (não repetir)
 
@@ -108,6 +112,17 @@ file_full/
 - **`.DS_Store` do macOS volta a aparecer** mesmo com `.gitignore` se já foi
   commitado antes — precisa `git rm -r --cached .` uma vez pra aplicar
   retroativamente.
+- **`/opt/addon_version.txt` precisa ser gerado no `Dockerfile`** (`COPY
+  config.yaml /opt/config.yaml` + `grep`/`sed` extraindo o campo `version:`).
+  Sem isso, `01-install-persistent-source.sh` nunca sabe que uma versão nova
+  chegou — comparação sempre "unknown" == "unknown", nunca reinstala depois
+  da primeira vez. Já aconteceu (uma sessão separada esqueceu esse passo ao
+  criar o mecanismo).
+- **Só um script por número em `cont-init.d/`** — já rolou de duas versões
+  do "monta o www" coexistirem (`01-bind-live-source.sh` +
+  `01-install-persistent-source.sh`), rodando os dois sem erro aparente mas
+  com lógica sobreposta/confusa. Se for substituir um script de boot, apagar
+  o antigo, não deixar os dois.
 - **Subir versão no `config.yaml` a cada mudança** — o usuário já pediu isso
   explicitamente; sem isso nem o Update nativo do HA nem o botão de
   atualização interno detectam que há algo novo. Versão atual: ver

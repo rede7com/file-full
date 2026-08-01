@@ -124,6 +124,11 @@ Transparência sobre o que este add-on pede e por quê:
 - **Formatação de disco** é protegida contra atingir partições do próprio
   HAOS (`hassos-*`) e swap (`zram*`) — tanto na interface quanto checado de
   novo no backend a cada tentativa, mesmo via requisição direta.
+- **`smb_enabled` (SMB de uso geral)**: diferente do Time Machine (só um
+  disco dedicado), esse compartilhamento expõe **todos os discos visíveis no
+  gerenciador** pela rede local. Mais superfície de acesso do que o Time
+  Machine sozinho — considere isso ao decidir a senha e quem tem acesso à
+  sua rede local.
 - Se você usa **outro add-on que também monta discos** (ex: Samba NAS) com
   automount ligado, ele pode "segurar" um disco antes que você consiga
   formatá-lo por aqui (erro típico: `apparently in use by the system`) —

@@ -5,7 +5,7 @@
 # ambos estiverem ligados:
 #
 #   [Arquivos]    smb_enabled=true    -> acesso "normal" de rede aos mesmos
-#                 discos que o gerenciador de arquivos vê (/mnt/hd_externo,
+#                 discos que o gerenciador de arquivos vê (/mnt/file_full,
 #                 os discos de disk_labels), pra montar como unidade de rede
 #                 no Windows/macOS/Linux sem passar pela interface web.
 #   [TimeMachine] time_machine_enabled=true -> compartilhamento dedicado a um
@@ -27,7 +27,7 @@
 # acontece como root, sempre com permissão garantida.
 # ==============================================================================
 
-ROOT_MOUNT="/mnt/hd_externo"
+ROOT_MOUNT="/mnt/file_full"
 
 SMB_ON=false
 TM_ON=false
