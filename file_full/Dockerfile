@@ -61,7 +61,7 @@ COPY www/ /var/www/html/
 RUN chmod a+x /etc/cont-init.d/00-mount-disk.sh \
     && chmod a+x /etc/cont-init.d/01-bind-live-source.sh \
     && chmod a+x /etc/cont-init.d/02-persist-data.sh \
-    && chmod a+x /etc/cont-init.d/03-setup-timemachine.sh \
+    && chmod a+x /etc/cont-init.d/03-setup-smb.sh \
     && chmod a+x /etc/services.d/webserver/run \
     && chmod a+x /etc/services.d/webserver/finish \
     && chmod a+x /etc/services.d/monitor/run \

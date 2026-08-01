@@ -20,8 +20,10 @@ Acesso pela sidebar do HA (Ingress), autenticado pela sua própria sessão do HA
   (só leitura)
 - Time Machine do macOS via SMB (compartilhamento dedicado, com anúncio
   automático na rede via Bonjour/mDNS)
-- Atualização integrada, sem precisar copiar arquivo manualmente depois da
-  primeira instalação
+- Compartilhamento SMB de uso geral (acesso aos mesmos discos do gerenciador
+  via rede local, com usuário/senha próprios)
+- Atualização automática pelo Supervisor do HA (repositório git) — sem botão
+  de atualização manual dentro do app
 
 ## Instalação
 
@@ -62,11 +64,12 @@ sudo mkfs.vfat -F 32 -n HD_EXTERNO /dev/sdX1   # FAT32
 | `monitor_enabled` | Liga/desliga o monitor de saúde (espaço em disco + SMART) |
 | `monitor_interval_minutes` | Intervalo entre checagens do monitor (5–1440 min) |
 | `disk_usage_alert_percent` | A partir de qual % de uso o monitor notifica (50–99%) |
-| `update_source_url` | URL `https://` de um pacote de atualização (veja "Atualização" abaixo) |
 | `time_machine_enabled` | Liga o compartilhamento SMB dedicado ao Time Machine |
 | `time_machine_disk` | Disco dedicado ao Time Machine (mesmo formato de `disk_labels`) — fica **inteiro** reservado, não é uma subpasta |
 | `time_machine_username` / `time_machine_password` | Credenciais do SMB, **separadas** do login web |
 | `time_machine_max_size_gb` | Limite de tamanho do backup (0 = sem limite) |
+| `smb_enabled` | Liga o compartilhamento SMB de uso geral (acesso normal aos discos, não o dedicado ao Time Machine) |
+| `smb_username` / `smb_password` | Credenciais do SMB de uso geral, **separadas** do login web e das do Time Machine |
 
 ## 3. Usando
 
@@ -75,8 +78,7 @@ sudo mkfs.vfat -F 32 -n HD_EXTERNO /dev/sdX1   # FAT32
 - **Uso de espaço** (📊): analisa o que está ocupando espaço na pasta atual.
 - **Editor** (📝): clique num arquivo → Editar. `Ctrl/Cmd+S` salva sem fechar.
 - **Configurações** (⚙️): extensões bloqueadas no upload, teste de notificação,
-  status do Time Machine.
-- **Atualização** (🔄): confere e aplica atualizações (veja abaixo).
+  status do Time Machine e do SMB de uso geral.
 
 ### Configurar o Time Machine no Mac
 
@@ -85,17 +87,20 @@ macOS → Time Machine → Selecionar Disco — deve aparecer sozinho em alguns
 segundos (via Bonjour). Se não aparecer, conecta manualmente pelo Finder → Ir
 → Conectar ao Servidor → `smb://<ip-do-ha>/TimeMachine`.
 
+### Acesso SMB de uso geral
+
+Com `smb_enabled: true`, `smb_username` e `smb_password` definidos, os mesmos
+discos visíveis no gerenciador (`disk_labels`) ficam acessíveis por SMB em
+`smb://<ip-do-ha>/Arquivos` — útil pra montar como unidade de rede no
+Windows/macOS/Linux sem passar pela interface web. Credenciais **separadas**
+tanto do login web quanto do Time Machine.
+
 ## Atualização
 
-Duas formas, conforme como você instalou:
-
-- **Instalado via repositório GitHub** (como este): Settings → Add-ons →
-  Add-on Store mostra "Atualização disponível" sozinho quando a versão do
-  `config.yaml` sobe — clique em Atualizar, como qualquer outro add-on.
-- **Botão "🔄 Atualização" dentro do próprio app**: baixa e aplica um pacote
-  de `update_source_url` (checksum `.sha256` opcional, mas conferido se
-  existir). Mudanças em `www/` valem na hora, sem rebuild; mudanças no
-  `Dockerfile`/`rootfs/` ainda pedem um Rebuild manual depois.
+Instalado via repositório GitHub (como este): Settings → Add-ons → Add-on
+Store mostra "Atualização disponível" sozinho quando a versão do
+`config.yaml` sobe — clique em Atualizar, como qualquer outro add-on. Não há
+mais um botão de atualização manual dentro do app.
 
 ## Notas de segurança
 
@@ -108,9 +113,11 @@ Transparência sobre o que este add-on pede e por quê:
   embutido do PHP, que não tem essa trava — necessário pra gravar em pastas
   montadas do host (`/config`, discos com donos variados) sem depender de
   quem é o dono real dos arquivos.
-- **`host_network: true`**: necessário só pro Time Machine (Bonjour/mDNS não
+- **`host_network: true`**: necessário pro Time Machine (Bonjour/mDNS não
   atravessa a rede isolada do Docker). Efeito colateral: a porta 445 (SMB)
-  passa a escutar direto na rede do host.
+  passa a escutar direto na rede do host — o que também é o que permite o
+  compartilhamento SMB de uso geral (`smb_enabled`) funcionar sem mapear porta
+  separada.
 - **Upload de `.php` não é bloqueado**: os arquivos ficam fora do
   `DocumentRoot` do servidor (no HD externo), então não são executáveis via
   HTTP mesmo enviados — não há rota até lá.

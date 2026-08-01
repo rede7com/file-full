@@ -354,14 +354,14 @@
     document.getElementById('btnSettings').onclick = () => openSettings();
     document.getElementById('btnDisks').onclick = () => openDisksPanel();
     document.getElementById('btnFolderUsage').onclick = () => openFolderUsage();
-    document.getElementById('btnUpdate').onclick = () => openUpdatePanel();
   }
 
   async function openSettings() {
     try {
-      const [data, tmStatus] = await Promise.all([
+      const [data, tmStatus, smbStatus] = await Promise.all([
         api('get_settings'),
         api('time_machine_status').catch(() => null),
+        api('smb_status').catch(() => null),
       ]);
       const current = (data.settings.blocked_extensions || []).join(', ');
       const tmHtml = tmStatus ? `
@@ -369,6 +369,13 @@
         <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">
           <strong>Time Machine:</strong> ${tmStatus.enabled ? '✅ Ativado' : '⭘ Desativado'}
           ${tmStatus.enabled ? `— disco dedicado <code>${tmStatus.disk}</code>, usuário SMB <code>${tmStatus.username}</code>${tmStatus.max_size_gb > 0 ? `, limite ${tmStatus.max_size_gb}GB` : ''}` : ''}
+          <br>Configurável na aba "Configuração" do próprio add-on (fora deste app).
+        </p>
+      ` : '';
+      const smbHtml = smbStatus ? `
+        <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">
+          <strong>SMB (acesso geral):</strong> ${smbStatus.enabled ? '✅ Ativado' : '⭘ Desativado'}
+          ${smbStatus.enabled ? `— compartilhamento <code>Arquivos</code>, usuário SMB <code>${smbStatus.username}</code>` : ''}
           <br>Configurável na aba "Configuração" do próprio add-on (fora deste app).
         </p>
       ` : '';
@@ -387,6 +394,7 @@
         </p>
         <button type="button" class="btn" id="btnTestNotif">🔔 Enviar notificação de teste</button>
         ${tmHtml}
+        ${smbHtml}
       `, async () => {
         const val = document.getElementById('modalInput').value;
         const fd = new FormData();
@@ -403,80 +411,6 @@
         } catch (e) { showToast(e.message, true); }
       };
     } catch (e) { showToast(e.message, true); }
-  }
-
-  function openUpdatePanel() {
-    modalBox.classList.add('modal-box-editor');
-    modalTitle.textContent = '🔄 Atualização';
-    modalBody.innerHTML = `
-      <p class="editor-hint" style="margin-bottom:12px">
-        Baixa e aplica uma atualização a partir da URL configurada em <code>update_source_url</code>
-        (Configuração do add-on). Mudanças em <code>www/</code> valem na hora; mudanças no Dockerfile
-        ou em <code>rootfs/</code> ainda exigem um Rebuild manual depois.
-      </p>
-      <button class="btn btn-primary" id="btnCheckUpdate">Verificar atualização</button>
-      <div id="updateResult" style="margin-top:14px"></div>
-    `;
-    modalOverlay.classList.remove('hidden');
-    modalConfirm.style.display = 'none';
-
-    document.getElementById('btnCheckUpdate').onclick = checkForUpdate;
-  }
-
-  async function checkForUpdate() {
-    const resultBox = document.getElementById('updateResult');
-    resultBox.innerHTML = '<p class="editor-hint">Verificando...</p>';
-    try {
-      const data = await api('check_update');
-      let html = `
-        <table class="disk-table">
-          <tr><td>Versão instalada</td><td>${data.current_version || '(desconhecida)'}</td></tr>
-          <tr><td>Versão no pacote</td><td>${data.new_version}</td></tr>
-          <tr><td>Checksum (.sha256)</td><td>${data.checksum_checked === true ? '✅ Confere' : (data.checksum_checked === false ? '❌ Não confere' : '— (nenhum arquivo .sha256 encontrado junto)')}</td></tr>
-        </table>
-      `;
-      if (data.checksum_checked === false) {
-        html += `<p style="color:var(--danger);font-weight:600;margin-top:10px">Checksum não confere — não recomendo aplicar. Pode ser o pacote errado ou algo adulterado no caminho.</p>`;
-      } else if (data.update_available) {
-        html += `
-          <div style="margin-top:14px">
-            <label style="display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px">
-              Pra confirmar, digite <code>ATUALIZAR</code>
-            </label>
-            <input type="text" id="updateConfirm" placeholder="ATUALIZAR" style="width:100%;box-sizing:border-box;padding:8px;margin-bottom:10px;border:1px solid var(--line);border-radius:6px">
-            <button class="btn btn-danger" id="btnApplyUpdate" disabled>Aplicar atualização</button>
-          </div>
-        `;
-      } else {
-        html += `<p class="editor-hint" style="margin-top:10px">Já está na versão mais recente.</p>`;
-      }
-      resultBox.innerHTML = html;
-
-      const confirmInput = document.getElementById('updateConfirm');
-      const applyBtn = document.getElementById('btnApplyUpdate');
-      if (confirmInput && applyBtn) {
-        confirmInput.addEventListener('input', () => {
-          applyBtn.disabled = confirmInput.value !== 'ATUALIZAR';
-        });
-        applyBtn.onclick = () => applyUpdate(confirmInput.value);
-      }
-    } catch (e) {
-      resultBox.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`;
-    }
-  }
-
-  async function applyUpdate(confirmValue) {
-    const resultBox = document.getElementById('updateResult');
-    const fd = new FormData();
-    fd.append('confirm', confirmValue);
-    resultBox.innerHTML = '<p class="editor-hint">Aplicando... não feche esta janela.</p>';
-    try {
-      const res = await api('apply_update', { method: 'POST', body: fd });
-      resultBox.innerHTML = `<p style="color:var(--accent);font-weight:600">${res.message}</p><p class="editor-hint">Backup do que estava rodando salvo em: ${res.backup}</p>`;
-      showToast('Atualização aplicada.');
-    } catch (e) {
-      resultBox.innerHTML = `<p style="color:var(--danger)">${e.message}</p>`;
-    }
   }
 
   async function openFolderUsage() {

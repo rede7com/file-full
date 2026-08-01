@@ -21,11 +21,11 @@ file_full/
 │   │   ├── 00-mount-disk.sh        ← monta disk_labels, expõe /config etc (flags)
 │   │   ├── 01-bind-live-source.sh  ← bind-mount de /addons/file_full/www sobre /var/www/html
 │   │   ├── 02-persist-data.sh      ← migra /data → /addon_configs/file_full (1x)
-│   │   └── 03-setup-timemachine.sh ← smb.conf + avahi, monta o disco do TM sozinho
+│   │   └── 03-setup-smb.sh         ← smb.conf + avahi p/ [Arquivos] (smb_enabled) e [TimeMachine] (time_machine_enabled)
 │   └── services.d/        ← processos de longa duração (s6)
 │       ├── webserver/     ← php83 -S (não Apache — ver "Decisões" abaixo)
 │       ├── monitor/       ← loop de checagem de espaço/SMART, notifica no HA
-│       ├── samba/         ← smbd, só ativo se time_machine_enabled
+│       ├── samba/         ← smbd, ativo se smb_enabled OU time_machine_enabled
 │       └── avahi/         ← avahi-daemon, idem
 └── www/                   ← app PHP (index/api/login/includes/assets)
 ```
@@ -70,11 +70,27 @@ file_full/
   sozinho, não depende de também estar em `disk_labels` (já causou confusão
   real — usuário configurou só um dos dois campos).
 
-- **Autoatualização tem dois caminhos**: nativo do HA (Update na Add-on
-  Store, já que virou repositório git) e um botão dentro do próprio app
+- **SMB deixou de ser exclusivo do Time Machine.** Antes, `smbd`/`avahi-daemon`
+  só ligavam com `time_machine_enabled`, e o `smb.conf` só tinha o
+  compartilhamento `[TimeMachine]`. Agora `03-setup-smb.sh` também escreve um
+  `[Arquivos]` (`smb_enabled`/`smb_username`/`smb_password`) apontando pro
+  mesmo `/mnt/hd_externo` que o gerenciador de arquivos usa — os dois
+  compartilhamentos coexistem (usuários SMB diferentes, mesmo `smb.conf`).
+  `samba/run` e `avahi/run` ligam se qualquer um dos dois flags estiver ativo.
+  O anúncio Avahi do `[Arquivos]` só publica `_smb._tcp` genérico; os registros
+  `_adisk._tcp`/`_device-info._tcp` que fazem o Mac reconhecer como destino de
+  Time Machine continuam exclusivos do `[TimeMachine]` (senão qualquer SMB
+  apareceria como opção de backup no macOS, o que não faz sentido pro
+  `[Arquivos]`).
+
+- **Autoatualização é só a nativa do HA agora** (Update na Add-on Store, já
+  que o repo virou git). O botão de atualização manual dentro do próprio app
   (`update_source_url`, baixa zip HTTPS + checksum `.sha256` opcional +
-  backup automático antes de sobrescrever). O segundo existia antes de migrar
-  pro GitHub; mantido por decisão do usuário mesmo sabendo do risco.
+  backup automático) existia de quando o projeto ainda não estava hospedado
+  — foi removido (código em `www/api.php`, `www/assets/js/app.js`,
+  `www/includes/functions.php` e a opção em `config.yaml`) porque virou
+  caminho redundante depois que o Supervisor passou a detectar updates
+  sozinho pela versão do `config.yaml`.
 
 ## Armadilhas já resolvidas (não repetir)
 

@@ -9,7 +9,7 @@ $action = $_REQUEST['action'] ?? '';
 $isViewer = !is_admin();
 
 // Ações que exigem privilégio de escrita (bloqueadas para role "viewer")
-$writeActions = ['mkdir', 'rename', 'delete', 'copy', 'move', 'upload', 'zip', 'unzip', 'chmod', 'update_settings', 'save_file', 'create_file', 'format_disk', 'apply_update'];
+$writeActions = ['mkdir', 'rename', 'delete', 'copy', 'move', 'upload', 'zip', 'unzip', 'chmod', 'update_settings', 'save_file', 'create_file', 'format_disk'];
 if (in_array($action, $writeActions, true) && $isViewer) {
     json_response(['error' => 'Seu usuário tem permissão apenas de visualização.'], 403);
 }
@@ -400,114 +400,6 @@ switch ($action) {
         json_response(['ok' => true]);
     }
 
-    case 'check_update': {
-        require_admin_json();
-        $options = get_addon_options();
-        $url = trim($options['update_source_url'] ?? '');
-        if ($url === '' || strpos($url, 'https://') !== 0) {
-            json_response(['error' => 'Configure uma URL HTTPS válida em "update_source_url" na Configuração do add-on.'], 400);
-        }
-
-        $tmpZip = sys_get_temp_dir() . '/file_full_update_' . uniqid() . '.zip';
-        if (!download_file($url, $tmpZip, 100 * 1024 * 1024)) {
-            json_response(['error' => 'Falha ao baixar o pacote de atualização de ' . $url], 500);
-        }
-
-        $checksumChecked = null;
-        $shaTmp = $tmpZip . '.sha256';
-        if (download_file($url . '.sha256', $shaTmp, 4096)) {
-            $expectedRaw = trim((string) file_get_contents($shaTmp));
-            $expected = strtolower(explode(' ', $expectedRaw)[0] ?? '');
-            $actual = strtolower((string) hash_file('sha256', $tmpZip));
-            $checksumChecked = ($expected !== '' && hash_equals($expected, $actual));
-            @unlink($shaTmp);
-        }
-
-        $newVersion = extract_version_from_zip($tmpZip);
-        @unlink($tmpZip);
-
-        if (!$newVersion) {
-            json_response(['error' => 'O pacote não contém um config.yaml válido com "version:" na raiz do zip.'], 400);
-        }
-
-        $currentVersion = get_current_addon_version();
-
-        json_response([
-            'current_version' => $currentVersion,
-            'new_version' => $newVersion,
-            'checksum_checked' => $checksumChecked,
-            'update_available' => $currentVersion === null || version_compare($newVersion, $currentVersion, '>'),
-        ]);
-    }
-
-    case 'apply_update': {
-        require_admin_json();
-        if (($_POST['confirm'] ?? '') !== 'ATUALIZAR') {
-            json_response(['error' => 'Confirmação inválida. Digite ATUALIZAR pra prosseguir.'], 400);
-        }
-
-        $options = get_addon_options();
-        $url = trim($options['update_source_url'] ?? '');
-        if ($url === '' || strpos($url, 'https://') !== 0) {
-            json_response(['error' => 'update_source_url inválida.'], 400);
-        }
-
-        $srcRoot = '/addons/file_full';
-        if (!is_dir($srcRoot)) {
-            json_response(['error' => 'Não encontrei /addons/file_full dentro do container. Confirme que "addons:rw" está no map: do config.yaml e refaça o rebuild.'], 500);
-        }
-
-        $tmpZip = sys_get_temp_dir() . '/file_full_update_' . uniqid() . '.zip';
-        if (!download_file($url, $tmpZip, 100 * 1024 * 1024)) {
-            json_response(['error' => 'Falha ao baixar o pacote de atualização.'], 500);
-        }
-
-        // Checksum: se existir um .sha256 junto, TEM que bater. Se não existir
-        // arquivo de checksum nenhum, segue sem essa checagem extra (aviso já
-        // dado na tela de "verificar" antes de chegar aqui).
-        $shaTmp = $tmpZip . '.sha256';
-        if (download_file($url . '.sha256', $shaTmp, 4096)) {
-            $expectedRaw = trim((string) file_get_contents($shaTmp));
-            $expected = strtolower(explode(' ', $expectedRaw)[0] ?? '');
-            $actual = strtolower((string) hash_file('sha256', $tmpZip));
-            @unlink($shaTmp);
-            if ($expected === '' || !hash_equals($expected, $actual)) {
-                @unlink($tmpZip);
-                json_response(['error' => 'Checksum não confere — pacote pode estar corrompido ou adulterado. Atualização cancelada, nada foi alterado.'], 400);
-            }
-        }
-
-        $extractDir = sys_get_temp_dir() . '/file_full_extract_' . uniqid();
-        mkdir($extractDir, 0755, true);
-        $zip = new ZipArchive();
-        if ($zip->open($tmpZip) !== true) {
-            @unlink($tmpZip);
-            json_response(['error' => 'Pacote zip inválido ou corrompido.'], 400);
-        }
-        $zip->extractTo($extractDir);
-        $zip->close();
-        @unlink($tmpZip);
-
-        if (!file_exists($extractDir . '/config.yaml') || !is_dir($extractDir . '/www')) {
-            recursive_delete($extractDir);
-            json_response(['error' => 'Estrutura do pacote inválida — esperado config.yaml e www/ na raiz do zip (sem pasta extra por cima).'], 400);
-        }
-
-        // Backup do que está rodando agora, antes de sobrescrever qualquer coisa.
-        $backupDir = '/data/update_backups/' . date('Y-m-d_His');
-        mkdir($backupDir, 0755, true);
-        recursive_copy($srcRoot, $backupDir);
-
-        recursive_copy($extractDir, $srcRoot);
-        recursive_delete($extractDir);
-
-        json_response([
-            'ok' => true,
-            'backup' => $backupDir,
-            'message' => 'Arquivos atualizados. Mudanças em www/ já valem na próxima requisição (sem rebuild). Se o Dockerfile ou a pasta rootfs/ também mudaram no pacote, é preciso ir em Configurações → Add-ons → File Manager HD PHP → Rebuild pra aplicar essa parte.',
-        ]);
-    }
-
     case 'time_machine_status': {
         require_admin_json();
         $options = get_addon_options();
@@ -516,6 +408,15 @@ switch ($action) {
             'disk' => $options['time_machine_disk'] ?? '',
             'username' => $options['time_machine_username'] ?? '',
             'max_size_gb' => (int) ($options['time_machine_max_size_gb'] ?? 0),
+        ]);
+    }
+
+    case 'smb_status': {
+        require_admin_json();
+        $options = get_addon_options();
+        json_response([
+            'enabled' => (bool) ($options['smb_enabled'] ?? false),
+            'username' => $options['smb_username'] ?? '',
         ]);
     }
 

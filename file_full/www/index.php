@@ -59,7 +59,6 @@ $serverLimits = [
         <button id="btnSettings" class="btn">⚙️ Configurações</button>
         <button id="btnDisks" class="btn">💽 Discos</button>
         <button id="btnFolderUsage" class="btn">📊 Uso de espaço</button>
-        <button id="btnUpdate" class="btn">🔄 Atualização</button>
         <?php endif; ?>
       </div>
     </div>

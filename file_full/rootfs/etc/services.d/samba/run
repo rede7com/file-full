@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
-if bashio::config.true 'time_machine_enabled'; then
-    bashio::log.info "Iniciando Samba (smbd) para Time Machine..."
+if bashio::config.true 'time_machine_enabled' || bashio::config.true 'smb_enabled'; then
+    bashio::log.info "Iniciando Samba (smbd)..."
     exec smbd --foreground --no-process-group
 else
     while true; do sleep 3600; done
