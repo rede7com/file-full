@@ -20,7 +20,7 @@ $serverLimits = [
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gerenciador de Arquivos</title>
-<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
 </head>
 <body>
   <div id="app" data-can-write="<?= is_admin() ? '1' : '0' ?>">
@@ -102,6 +102,6 @@ $serverLimits = [
   </div>
 
   <script>window.SERVER_LIMITS = <?= json_encode($serverLimits) ?>;</script>
-  <script src="assets/js/app.js"></script>
+  <script src="assets/js/app.js?v=<?php echo filemtime(__DIR__ . '/assets/js/app.js'); ?>"></script>
 </body>
 </html>
