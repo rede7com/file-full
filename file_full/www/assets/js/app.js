@@ -452,6 +452,7 @@
 
   function renderDisksList(devices, usage, tmStatus) {
     modalBox.classList.add('modal-box-editor');
+    modalBox.classList.add('modal-box-disks');
     modalTitle.textContent = '💽 Discos';
 
     const usageHtml = (usage && usage.length) ? `
@@ -722,6 +723,7 @@
   const modalBox = modalOverlay.querySelector('.modal-box');
   function openModal(title, bodyHtml, onConfirm) {
     modalBox.classList.remove('modal-box-editor');
+    modalBox.classList.remove('modal-box-disks');
     modalConfirm.style.display = '';
     modalConfirm.textContent = 'Confirmar';
     modalTitle.textContent = title;

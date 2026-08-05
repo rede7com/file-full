@@ -268,9 +268,11 @@ body {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
 .modal-box.modal-box-editor { width: min(900px, 92vw); }
+.modal-box.modal-box-disks { width: min(1200px, 96vw); }
 .disks-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
 .disks-usage-col { flex: 0 0 240px; max-width: 100%; max-height: 60vh; overflow-y: auto; }
-.disks-table-col { flex: 1 1 420px; min-width: 0; max-height: 60vh; overflow-y: auto; }
+.disks-table-col { flex: 1 1 420px; min-width: 0; max-height: 60vh; overflow-y: auto; overflow-x: auto; }
+.disks-table-col .disk-table { min-width: 640px; }
 @media (max-width: 640px) {
   .disks-usage-col, .disks-table-col { flex: 1 1 100%; max-height: none; }
 }
@@ -293,7 +295,7 @@ body {
 }
 
 .usage-summary { margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
-.usage-item-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.usage-item-head { display: flex; flex-direction: column; gap: 2px; font-size: 13px; margin-bottom: 4px; }
 .usage-item-head span:last-child { color: var(--ink-soft); font-size: 12px; }
 .usage-bar { height: 8px; background: var(--surface-soft); border-radius: 4px; overflow: hidden; }
 .usage-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
