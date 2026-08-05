@@ -5,17 +5,18 @@
  * Ajustado para rodar como add-on do Home Assistant:
  * - BASE_DIR aponta para o HD externo montado pelo add-on (fora do webroot,
  *   então não é acessível por URL direta independente de .htaccess).
- * - DATA_DIR aponta para /addon_configs/file_full — pasta persistente que
- *   TAMBÉM entra no backup do Home Assistant (diferente de /data, que
- *   sobrevive a updates mas fica de fora do backup). A migração de /data
- *   pra cá, se houver dados antigos, acontece no cont-init 02-persist-data.sh.
+ * - DATA_DIR aponta para /data — pasta persistente própria do add-on, que
+ *   entra no backup do HA quando este add-on é selecionado no backup
+ *   (diferente de /addon_configs, que NÃO entra automaticamente e se perde
+ *   numa recuperação). A migração de /addon_configs pra cá, se houver dados
+ *   de uma versão anterior, acontece no cont-init 02-persist-data.sh.
  */
 session_start();
 
 date_default_timezone_set('America/Sao_Paulo');
 
 // Diretório de dados internos (usuários, permissões, cache de miniaturas)
-define('DATA_DIR', '/addon_configs/file_full');
+define('DATA_DIR', '/data');
 define('USERS_FILE', DATA_DIR . '/users.json');
 define('PERMISSIONS_FILE', DATA_DIR . '/permissions.json');
 define('SETTINGS_FILE', DATA_DIR . '/settings.json');

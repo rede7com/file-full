@@ -1,24 +1,26 @@
 #!/usr/bin/with-contenv bashio
 # ==============================================================================
-# O código do app (www/) fica instalado em /addon_configs/file_full/www —
-# pasta persistente independente de como o add-on foi instalado (local ou
-# repositório git). O truque antigo (bind-mount direto de /addons/file_full)
-# só funcionava pra instalação local; numa instalação por repositório o
-# Supervisor clona o código num lugar interno diferente, fora de /addons, e
-# aquele truque parava de fazer efeito silenciosamente.
+# O código do app (www/) fica instalado em /data/www — pasta persistente
+# própria do add-on, que sobrevive a updates E entra no backup do HA quando
+# este add-on é selecionado (diferente de /addon_configs, que NÃO entra
+# automaticamente e se perde numa recuperação — testado na prática). O truque
+# antigo (bind-mount direto de /addons/file_full) só funcionava pra
+# instalação local; numa instalação por repositório o Supervisor clona o
+# código num lugar interno diferente, fora de /addons, e aquele truque parava
+# de fazer efeito silenciosamente.
 #
 # Comparando a versão gravada na imagem (/opt/addon_version.txt, extraída do
-# config.yaml no build) com a versão já instalada em /addon_configs (guardada
-# num arquivo marcador): se mudou, re-semeia a partir do conteúdo da imagem
-# antes de montar — é o que faz uma atualização via git+Rebuild realmente
-# valer. Se não mudou, mantém o que já está lá — permite editar arquivos
-# direto em /addon_configs/file_full/www (SSH, File Editor) sem que a próxima
-# subida do container desfaça a edição.
+# config.yaml no build) com a versão já instalada em /data (guardada num
+# arquivo marcador): se mudou, re-semeia a partir do conteúdo da imagem antes
+# de montar — é o que faz uma atualização via git+Rebuild realmente valer. Se
+# não mudou, mantém o que já está lá — permite editar arquivos direto em
+# /data/www (SSH, File Editor) sem que a próxima subida do container desfaça
+# a edição.
 # ==============================================================================
 
-PERSIST_WWW="/addon_configs/file_full/www"
+PERSIST_WWW="/data/www"
 WEBROOT="/var/www/html"
-MARKER="/addon_configs/file_full/.installed_version"
+MARKER="/data/.installed_version"
 IMAGE_VERSION=$(cat /opt/addon_version.txt 2>/dev/null || echo "unknown")
 INSTALLED_VERSION=$(cat "${MARKER}" 2>/dev/null || echo "")
 

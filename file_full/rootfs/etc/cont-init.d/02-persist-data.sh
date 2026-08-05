@@ -1,16 +1,19 @@
 #!/usr/bin/with-contenv bashio
 # ==============================================================================
-# Garante que /addon_configs/file_full existe (pasta persistente que também
-# entra no backup do Home Assistant — diferente de /data, que sobrevive a
-# updates mas fica de fora do backup).
+# Garante que /data existe (pasta persistente própria do add-on — sobrevive
+# a updates e ENTRA no backup do HA quando este add-on é selecionado no
+# backup). /addon_configs/file_full foi tentado antes com base na suposição
+# de que entraria no backup automaticamente, mas na prática NÃO entra e os
+# dados se perdem numa recuperação — por isso a volta pra /data.
 #
-# Migração única: se já existirem dados em /data de uma instalação anterior
-# (versões antigas deste add-on usavam /data) e ainda não existir nada no
-# novo lugar, copia — assim não é preciso recriar o usuário/senha de novo.
+# Migração única: se já existirem dados em /addon_configs/file_full de uma
+# instalação anterior (versão que usou aquele caminho por engano) e ainda
+# não existir nada no novo lugar, copia — assim não é preciso recriar o
+# usuário/senha de novo.
 # ==============================================================================
 
-NEW_DATA="/addon_configs/file_full"
-OLD_DATA="/data"
+NEW_DATA="/data"
+OLD_DATA="/addon_configs/file_full"
 
 mkdir -p "${NEW_DATA}"
 

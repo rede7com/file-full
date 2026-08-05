@@ -1,5 +1,5 @@
 name: "File Manager HD PHP"
-version: "2026-1.3.3"
+version: "2026-1.3.4"
 slug: file_full
 description: "Gerenciador de arquivos PHP, com acesso ao /config e HDs Externos"
 url: "https://rede7.com.br"
@@ -41,10 +41,13 @@ panel_title: File Manager HD PHP
 # mesmo map (addon_config é uma pasta privada só deste add-on, diferente do
 # /config real do HA que já usamos).
 #
-# all_addon_configs:rw tem um segundo uso além de expose_addon_configs: é
-# onde o próprio add-on guarda seus dados persistentes (usuários, senha,
-# configurações) em /addon_configs/file_full — pasta que ENTRA no backup do
-# HA (diferente de /data, que sobrevive a updates mas fica fora do backup).
+# all_addon_configs:rw dá acesso de leitura/escrita a /addon_configs de
+# TODOS os add-ons (usado pela opção expose_addon_configs, pra navegar/editar
+# config de outros add-ons pelo gerenciador). NÃO é onde este add-on guarda
+# os próprios dados — /addon_configs não entra automaticamente no backup do
+# HA (testado na prática) e se perde numa recuperação. Dados próprios
+# (usuários, senha, código instalado) ficam em /data, que é automático pra
+# todo add-on e entra no backup quando o add-on é selecionado.
 map:
   - config:rw
   - homeassistant_config:rw

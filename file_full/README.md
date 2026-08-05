@@ -173,6 +173,7 @@ Transparência sobre o que este add-on pede e por quê:
 
 ## Dados persistentes
 
-Usuários, senhas e configurações do app ficam em `/addon_configs/file_full`
-— essa pasta **entra no backup do Home Assistant** e sobrevive a atualizações
-e reinstalações (diferente de `/data`, que é só cache local).
+Usuários, senhas e configurações do app ficam em `/data` — essa pasta é
+própria de cada add-on, sobrevive a atualizações/reinstalações, e **entra no
+backup do Home Assistant quando este add-on é selecionado** (backup completo
+ou parcial marcando o add-on).
