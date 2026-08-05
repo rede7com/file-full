@@ -252,6 +252,8 @@ body {
   width: 380px;
   padding: 20px;
   box-shadow: 0 20px 50px rgba(0,0,0,.3);
+  max-height: 88vh;
+  overflow-y: auto;
 }
 .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 .modal-body input[type=text] {
@@ -266,6 +268,12 @@ body {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
 .modal-box.modal-box-editor { width: min(900px, 92vw); }
+.disks-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.disks-usage-col { flex: 0 0 240px; max-width: 100%; max-height: 60vh; overflow-y: auto; }
+.disks-table-col { flex: 1 1 420px; min-width: 0; max-height: 60vh; overflow-y: auto; }
+@media (max-width: 640px) {
+  .disks-usage-col, .disks-table-col { flex: 1 1 100%; max-height: none; }
+}
 .editor-textarea {
   width: 100%; box-sizing: border-box; height: 60vh;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

@@ -1,5 +1,7 @@
 # File Manager HD PHP
 
+![icon](icon.png)
+
 Gerenciador de arquivos self-contained pra Home Assistant: monta HDs externos,
 dá acesso opcional às pastas do próprio HA (`/config`, `/backup`, `/addons`...),
 e funciona como um NAS básico — sem depender de nenhum outro add-on.
@@ -24,6 +26,24 @@ Acesso pela sidebar do HA (Ingress), autenticado pela sua própria sessão do HA
   via rede local, com usuário/senha próprios)
 - Atualização automática pelo Supervisor do HA (repositório git) — sem botão
   de atualização manual dentro do app
+- Cliente WireGuard embutido: conecta este addon a um servidor VPN existente,
+  com escopo restrito (não tuneliza a navegação normal do host)
+
+## Tecnologias utilizadas
+
+![PHP](https://img.shields.io/badge/PHP-777BB4?logo=php&logoColor=white)
+![WireGuard](https://img.shields.io/badge/WireGuard-88171A?logo=wireguard&logoColor=white)
+![Samba](https://img.shields.io/badge/Samba-0078D4?logo=sambafile&logoColor=white)
+![Avahi/Bonjour](https://img.shields.io/badge/Avahi%2FBonjour-333333?logo=apple&logoColor=white)
+![Alpine Linux](https://img.shields.io/badge/Alpine_Linux-0D597F?logo=alpinelinux&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+
+PHP, WireGuard, Samba, Avahi/Bonjour, Alpine Linux e Docker são marcas
+registradas de seus respectivos detentores (The PHP Group; WireGuard é marca
+registrada de Jason A. Donenfeld; Samba é marca registrada da Samba Team;
+Avahi/Bonjour, Apple Inc.; Alpine Linux, Alpine Linux Development Team;
+Docker, Docker Inc.). Uso aqui é apenas informativo, sem qualquer afiliação,
+patrocínio ou endosso.
 
 ## Instalação
 
@@ -70,6 +90,15 @@ sudo mkfs.vfat -F 32 -n HD_EXTERNO /dev/sdX1   # FAT32
 | `time_machine_max_size_gb` | Limite de tamanho do backup (0 = sem limite) |
 | `smb_enabled` | Liga o compartilhamento SMB de uso geral (acesso normal aos discos, não o dedicado ao Time Machine) |
 | `smb_username` / `smb_password` | Credenciais do SMB de uso geral, **separadas** do login web e das do Time Machine |
+| `wg_enabled` | Liga o cliente WireGuard (conecta este addon a um servidor VPN existente) |
+| `wg_private_key` | Chave privada do cliente (vem do `.conf` gerado pelo servidor VPN) |
+| `wg_address` | IP/máscara deste addon dentro da VPN (ex: `10.96.165.4/24`) |
+| `wg_dns` | DNS a usar enquanto a VPN está ativa (opcional) |
+| `wg_peer_public_key` | Chave pública do servidor VPN |
+| `wg_preshared_key` | Chave pré-compartilhada (opcional, se o servidor exigir) |
+| `wg_endpoint` | Endereço do servidor VPN, `host:porta` (ex: `144.22.193.41:51820`) |
+| `wg_allowed_ips` | Sub-rede roteada pela VPN. **Deixe em branco** — calculado sozinho como o `/24` de `wg_address`; nunca use `0.0.0.0/0` aqui (tunelaria toda a navegação do host) |
+| `wg_persistent_keepalive` | Intervalo de keepalive em segundos (0 desliga) |
 
 ## 3. Usando
 
@@ -94,6 +123,14 @@ discos visíveis no gerenciador (`disk_labels`) ficam acessíveis por SMB em
 `smb://<ip-do-ha>/Arquivos` — útil pra montar como unidade de rede no
 Windows/macOS/Linux sem passar pela interface web. Credenciais **separadas**
 tanto do login web quanto do Time Machine.
+
+### Cliente WireGuard
+
+Com `wg_enabled: true` e os campos `wg_*` preenchidos com os dados do `.conf`
+que o servidor VPN te deu, o addon conecta nele como cliente. Por padrão
+(`wg_allowed_ips` em branco) só a sub-rede da VPN é roteada pelo túnel — a
+navegação normal do host continua fora da VPN. Verifique a conexão via SSH no
+host: `ip addr show wg0` deve mostrar o IP configurado em `wg_address`.
 
 ## Atualização
 

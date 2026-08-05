@@ -478,15 +478,21 @@
     }).join('');
 
     modalBody.innerHTML = `
-      ${usageHtml}
-      <p class="editor-hint" style="margin-bottom:10px">
-        Discos do sistema do próprio Home Assistant (boot, dados, swap) não aparecem aqui —
-        nunca podem ser formatados por esse painel.
-      </p>
-      <table class="disk-table">
-        <thead><tr><th>Dispositivo</th><th>Nome atual</th><th>Sistema</th><th>Tamanho</th><th>Montado em</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6">Nenhum dispositivo encontrado.</td></tr>'}</tbody>
-      </table>
+      <div class="disks-layout">
+        <div class="disks-usage-col">
+          ${usageHtml || '<p class="editor-hint">Sem dados de uso de disco.</p>'}
+        </div>
+        <div class="disks-table-col">
+          <p class="editor-hint" style="margin-bottom:10px">
+            Discos do sistema do próprio Home Assistant (boot, dados, swap) não aparecem aqui —
+            nunca podem ser formatados por esse painel.
+          </p>
+          <table class="disk-table">
+            <thead><tr><th>Dispositivo</th><th>Nome atual</th><th>Sistema</th><th>Tamanho</th><th>Montado em</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6">Nenhum dispositivo encontrado.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
     `;
     modalOverlay.classList.remove('hidden');
     modalConfirm.style.display = 'none'; // esse modal não usa o botão de confirmar padrão
