@@ -1,0 +1,11 @@
+#!/usr/bin/with-contenv bashio
+if bashio::config.true 'wg_enabled' && [ -n "$(bashio::config 'wg_endpoint_host')" ]; then
+    bashio::log.info "Subindo interface WireGuard (wg0)..."
+    wg-quick up wg0
+    # wg-quick não tem modo foreground; mantém o serviço "vivo" pro s6 e
+    # derruba a interface de forma limpa se o container parar.
+    trap 'wg-quick down wg0; exit 0' TERM INT
+    while true; do sleep 3600 & wait $!; done
+else
+    while true; do sleep 3600; done
+fi

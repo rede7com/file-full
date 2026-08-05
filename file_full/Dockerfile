@@ -22,7 +22,9 @@ RUN apk add --no-cache \
     eudev \
     curl \
     samba \
-    avahi
+    avahi \
+    wireguard-tools \
+    iptables
 
 # Avahi normalmente precisa de dbus pra funcionar, mas isso significaria mais
 # um serviço rodando no container — enable-dbus=no deixa ele operar sozinho,
@@ -70,6 +72,7 @@ RUN chmod a+x /etc/cont-init.d/00-mount-disk.sh \
     && chmod a+x /etc/cont-init.d/01-install-persistent-source.sh \
     && chmod a+x /etc/cont-init.d/02-persist-data.sh \
     && chmod a+x /etc/cont-init.d/03-setup-smb.sh \
+    && chmod a+x /etc/cont-init.d/04-setup-wireguard.sh \
     && chmod a+x /etc/services.d/webserver/run \
     && chmod a+x /etc/services.d/webserver/finish \
     && chmod a+x /etc/services.d/monitor/run \
@@ -77,4 +80,6 @@ RUN chmod a+x /etc/cont-init.d/00-mount-disk.sh \
     && chmod a+x /etc/services.d/samba/run \
     && chmod a+x /etc/services.d/samba/finish \
     && chmod a+x /etc/services.d/avahi/run \
-    && chmod a+x /etc/services.d/avahi/finish
+    && chmod a+x /etc/services.d/avahi/finish \
+    && chmod a+x /etc/services.d/wireguard/run \
+    && chmod a+x /etc/services.d/wireguard/finish
