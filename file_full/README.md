@@ -18,8 +18,15 @@ Acesso pela sidebar do HA (Ingress), autenticado pela sua própria sessão do HA
   contra formatar partições do próprio sistema do HAOS (e swap/zram)
 - Monitoramento de saúde S.M.A.R.T. e uso de espaço por disco
 - Notificações no próprio painel do HA (disco cheio, falha de SMART)
-- Dois papéis de usuário: administrador (leitura/escrita) e visualizador
-  (só leitura)
+- Múltiplos usuários de acesso ao app (administrador ou só leitura),
+  criados e removidos direto pela aba Configurações → Usuários — separados
+  de SMB e Time Machine, que têm login próprio cada um
+- Configuração do add-on (discos, SMB, Time Machine, WireGuard, usuários,
+  sistema) direto pela própria interface web, sem precisar abrir a aba
+  "Configuração" do add-on no HA — salvar já reinicia sozinho
+- Acesso também numa aba separada do navegador, fora do painel do HA
+  (porta própria, além do Ingress)
+- Sobe só com PHP, sem exigir nenhum disco configurado
 - Time Machine do macOS via SMB (compartilhamento dedicado, com anúncio
   automático na rede via Bonjour/mDNS)
 - Compartilhamento SMB de uso geral (acesso aos mesmos discos do gerenciador
@@ -73,6 +80,12 @@ sudo mkfs.vfat -F 32 -n HD_EXTERNO /dev/sdX1   # FAT32
 
 ## 2. Configuração
 
+Tudo abaixo pode ser configurado de duas formas: pela aba "Configuração" do
+add-on no HA (como sempre), **ou** direto pela própria interface web em
+Configurações → cada seção (Discos, SMB, Time Machine, WireGuard, Sistema) —
+salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
+`hassio_api: true` no `config.yaml` (já incluído).
+
 | Opção | O que faz |
 |---|---|
 | `disk_labels` | Lista de discos a montar. Cada item: `"NOME"` (por label) ou `"uuid:XXXX-YYYY[:Nome Amigável]"` (por UUID — use quando dois discos têm o mesmo label; veja o UUID com `blkid` via SSH) |
@@ -103,11 +116,22 @@ sudo mkfs.vfat -F 32 -n HD_EXTERNO /dev/sdX1   # FAT32
 ## 3. Usando
 
 - **Primeiro acesso**: cria o usuário administrador na tela de login.
-- **Discos** (💽, aba admin): listar, formatar, checar SMART e uso de espaço.
+- **Aba separada** (🔗, topo): abre o app fora do painel do HA, numa porta
+  própria — não depende de estar dentro do dashboard.
 - **Uso de espaço** (📊): analisa o que está ocupando espaço na pasta atual.
 - **Editor** (📝): clique num arquivo → Editar. `Ctrl/Cmd+S` salva sem fechar.
-- **Configurações** (⚙️): extensões bloqueadas no upload, teste de notificação,
-  status do Time Machine e do SMB de uso geral.
+- **Configurações** (⚙️): hub com uma seção por assunto —
+  - **Geral**: extensões bloqueadas no upload, teste de notificação.
+  - **Discos & Montagem**: lista os discos encontrados agora e edita quais
+    montar. Botão à parte pra ver uso de espaço e formatar (lista simples
+    primeiro — clique num disco pra expandir o uso dele).
+  - **SMB**, **Time Machine**, **WireGuard**: liga/desliga e credenciais de
+    cada um, sem precisar sair do app.
+  - **Usuários**: cria e remove logins do próprio app (administrador ou só
+    leitura) — **não tem relação com as credenciais de SMB ou Time Machine**,
+    que continuam com login próprio em cada seção.
+  - **Sistema**: monitor de SMART/espaço, pastas extras visíveis
+    (`/config`, `/addons`, `/backup`, `/addon_configs`).
 
 ### Configurar o Time Machine no Mac
 

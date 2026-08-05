@@ -267,14 +267,25 @@ body {
 .modal-body .folder-picker-item.active { background: var(--accent-soft); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.settings-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 18px 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-soft); cursor: pointer; font-size: 13px; font-weight: 600;
+  color: var(--ink); transition: background .15s, border-color .15s;
+}
+.settings-tile:hover { background: var(--accent-soft); border-color: var(--accent); }
+.settings-tile span { font-weight: 500; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .modal-box.modal-box-editor { width: min(900px, 92vw); }
-.modal-box.modal-box-disks { width: min(1200px, 96vw); }
-.disks-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
-.disks-usage-col { flex: 0 0 240px; max-width: 100%; max-height: 60vh; overflow-y: auto; }
-.disks-table-col { flex: 1 1 420px; min-width: 0; max-height: 60vh; overflow-y: auto; overflow-x: auto; }
-.disks-table-col .disk-table { min-width: 640px; }
+.modal-box.modal-box-disks { width: min(760px, 94vw); }
+.disks-cards { display: flex; flex-direction: column; gap: 10px; max-height: 65vh; overflow-y: auto; }
+.disk-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.disk-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer; flex-wrap: wrap; }
+.disk-card-head .editor-hint { display: block; margin-top: 2px; }
+.disk-card-usage { padding-top: 4px; }
 @media (max-width: 640px) {
-  .disks-usage-col, .disks-table-col { flex: 1 1 100%; max-height: none; }
+  .disk-card-head { flex-direction: column; align-items: stretch; }
 }
 .editor-textarea {
   width: 100%; box-sizing: border-box; height: 60vh;

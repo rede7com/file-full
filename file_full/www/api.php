@@ -9,7 +9,7 @@ $action = $_REQUEST['action'] ?? '';
 $isViewer = !is_admin();
 
 // Ações que exigem privilégio de escrita (bloqueadas para role "viewer")
-$writeActions = ['mkdir', 'rename', 'delete', 'copy', 'move', 'upload', 'zip', 'unzip', 'chmod', 'update_settings', 'save_file', 'create_file', 'format_disk'];
+$writeActions = ['mkdir', 'rename', 'delete', 'copy', 'move', 'upload', 'zip', 'unzip', 'chmod', 'update_settings', 'save_file', 'create_file', 'format_disk', 'save_addon_options', 'restart_addon', 'create_user', 'delete_user'];
 if (in_array($action, $writeActions, true) && $isViewer) {
     json_response(['error' => 'Seu usuário tem permissão apenas de visualização.'], 403);
 }
@@ -437,6 +437,83 @@ switch ($action) {
         $list = array_values(array_unique($list));
         save_settings(['blocked_extensions' => $list]);
         json_response(['ok' => true, 'blocked_extensions' => $list]);
+    }
+
+    case 'get_addon_options': {
+        require_admin_json();
+        $opt = get_addon_options();
+        // Senhas nunca voltam pro navegador — só um indicador se já tem valor.
+        foreach (['time_machine_password', 'smb_password', 'wg_private_key', 'wg_preshared_key'] as $k) {
+            $opt[$k . '_set'] = !empty($opt[$k]);
+            $opt[$k] = '';
+        }
+        json_response(['options' => $opt]);
+    }
+
+    case 'save_addon_options': {
+        require_admin_json();
+        $incoming = json_decode($_POST['options'] ?? '{}', true);
+        if (!is_array($incoming)) json_response(['error' => 'Dados inválidos.'], 400);
+
+        // Campos de senha em branco = "não mexer" (o usuário não digitou nada
+        // pra trocar); remove do payload pra save_addon_options() manter o
+        // valor atual em vez de apagar.
+        foreach (['time_machine_password', 'smb_password', 'wg_private_key', 'wg_preshared_key'] as $k) {
+            if (array_key_exists($k, $incoming) && $incoming[$k] === '') {
+                unset($incoming[$k]);
+            }
+        }
+
+        if (!save_addon_options($incoming)) {
+            json_response(['error' => 'Falha ao salvar. Verifique se hassio_api: true está no config.yaml e se o add-on foi reconstruído.'], 500);
+        }
+        json_response(['ok' => true]);
+    }
+
+    case 'restart_addon': {
+        require_admin_json();
+        restart_addon();
+        json_response(['ok' => true]);
+    }
+
+    case 'list_users': {
+        require_admin_json();
+        $users = array_map(fn($u) => [
+            'username' => $u['username'],
+            'role' => $u['role'],
+            'created_at' => $u['created_at'] ?? null,
+        ], load_users());
+        json_response(['users' => $users]);
+    }
+
+    case 'create_user': {
+        require_admin_json();
+        $username = trim($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $role = ($_POST['role'] ?? '') === 'admin' ? 'admin' : 'viewer';
+        if ($username === '' || strlen($password) < 8) {
+            json_response(['error' => 'Usuário obrigatório e senha com no mínimo 8 caracteres.'], 400);
+        }
+        if (!create_user($username, $password, $role)) {
+            json_response(['error' => 'Já existe um usuário com esse nome.'], 409);
+        }
+        json_response(['ok' => true]);
+    }
+
+    case 'delete_user': {
+        require_admin_json();
+        $username = trim($_POST['username'] ?? '');
+        $me = current_user()['username'] ?? '';
+        if (strcasecmp($username, $me) === 0) {
+            json_response(['error' => 'Você não pode excluir o próprio usuário logado.'], 400);
+        }
+        $admins = array_filter(load_users(), fn($u) => $u['role'] === 'admin');
+        $target = find_user($username);
+        if ($target && $target['role'] === 'admin' && count($admins) <= 1) {
+            json_response(['error' => 'Precisa sobrar ao menos um administrador.'], 400);
+        }
+        if (!delete_user($username)) json_response(['error' => 'Usuário não encontrado.'], 404);
+        json_response(['ok' => true]);
     }
 
     case 'chmod': {

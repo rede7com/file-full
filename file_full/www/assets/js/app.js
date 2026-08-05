@@ -352,65 +352,298 @@
     document.getElementById('btnDelete').onclick = () => deleteSelection();
     document.getElementById('btnPaste').onclick = () => pasteClipboard();
     document.getElementById('btnSettings').onclick = () => openSettings();
-    document.getElementById('btnDisks').onclick = () => openDisksPanel();
     document.getElementById('btnFolderUsage').onclick = () => openFolderUsage();
   }
 
-  async function openSettings() {
+  function esc(v) { return (v == null ? '' : String(v)).replace(/"/g, '&quot;'); }
+  function inputRow(label, id, value, opts = {}) {
+    const type = opts.type || 'text';
+    const ph = opts.placeholder || '';
+    return `<label style="display:block;font-size:12px;color:var(--ink-soft);margin:10px 0 4px">${label}</label>
+      <input type="${type}" id="${id}" value="${esc(value)}" placeholder="${esc(ph)}" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--line);border-radius:6px">`;
+  }
+  function checkboxRow(label, id, checked) {
+    return `<label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px">
+      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''}> ${label}
+    </label>`;
+  }
+  function backBtnHtml() {
+    return `<button type="button" class="btn" id="settingsBack" style="margin-bottom:14px">← Voltar</button>`;
+  }
+  function wireBack() {
+    document.getElementById('settingsBack').onclick = () => renderSettingsHub();
+  }
+  async function saveAddonOptionsAndRestart(partial) {
     try {
-      const [data, tmStatus, smbStatus] = await Promise.all([
-        api('get_settings'),
-        api('time_machine_status').catch(() => null),
-        api('smb_status').catch(() => null),
-      ]);
-      const current = (data.settings.blocked_extensions || []).join(', ');
-      const tmHtml = tmStatus ? `
-        <hr style="margin:14px 0;border:none;border-top:1px solid var(--line)">
-        <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">
-          <strong>Time Machine:</strong> ${tmStatus.enabled ? '✅ Ativado' : '⭘ Desativado'}
-          ${tmStatus.enabled ? `— disco dedicado <code>${tmStatus.disk}</code>, usuário SMB <code>${tmStatus.username}</code>${tmStatus.max_size_gb > 0 ? `, limite ${tmStatus.max_size_gb}GB` : ''}` : ''}
-          <br>Configurável na aba "Configuração" do próprio add-on (fora deste app).
-        </p>
-      ` : '';
-      const smbHtml = smbStatus ? `
-        <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">
-          <strong>SMB (acesso geral):</strong> ${smbStatus.enabled ? '✅ Ativado' : '⭘ Desativado'}
-          ${smbStatus.enabled ? `— compartilhamento <code>Arquivos</code>, usuário SMB <code>${smbStatus.username}</code>` : ''}
-          <br>Configurável na aba "Configuração" do próprio add-on (fora deste app).
-        </p>
-      ` : '';
-      openModal('Configurações de segurança', `
-        <p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px">
-          Estas extensões nunca podem ser enviadas, mesmo removidas da lista abaixo:
-          <strong>${data.always_blocked.join(', ')}</strong>
-        </p>
-        <label style="display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px">
-          Extensões extras bloqueadas (separadas por vírgula)
-        </label>
-        <input type="text" id="modalInput" value="${current.replace(/"/g, '&quot;')}" placeholder="exe, bat, sh, jar">
-        <hr style="margin:14px 0;border:none;border-top:1px solid var(--line)">
-        <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">
-          Notificações no Home Assistant (disco cheio, falha SMART) — testar se a integração está funcionando:
-        </p>
-        <button type="button" class="btn" id="btnTestNotif">🔔 Enviar notificação de teste</button>
-        ${tmHtml}
-        ${smbHtml}
-      `, async () => {
-        const val = document.getElementById('modalInput').value;
-        const fd = new FormData();
-        fd.append('blocked_extensions', val);
-        try {
-          await api('update_settings', { method: 'POST', body: fd });
-          showToast('Configurações salvas.');
-        } catch (e) { showToast(e.message, true); }
-      });
-      document.getElementById('btnTestNotif').onclick = async () => {
-        try {
-          await api('test_notification', { method: 'POST', body: new FormData() });
-          showToast('Notificação enviada — confira o sininho do Home Assistant.');
-        } catch (e) { showToast(e.message, true); }
-      };
+      const fd = new FormData();
+      fd.append('options', JSON.stringify(partial));
+      await api('save_addon_options', { method: 'POST', body: fd });
+      showToast('Salvo — reiniciando o add-on...');
+      api('restart_addon', { method: 'POST', body: new FormData() }).catch(() => {});
+      setTimeout(() => modalOverlay.classList.add('hidden'), 1500);
     } catch (e) { showToast(e.message, true); }
+  }
+
+  function openSettings() { renderSettingsHub(); }
+
+  function renderSettingsHub() {
+    modalBox.classList.remove('modal-box-disks');
+    modalBox.classList.add('modal-box-editor');
+    modalTitle.textContent = '⚙️ Configurações';
+    modalConfirm.style.display = 'none';
+    modalBody.innerHTML = `
+      <div class="settings-grid">
+        <button class="settings-tile" data-s="geral">🔒<span>Geral</span></button>
+        <button class="settings-tile" data-s="discos">💽<span>Discos &amp; Montagem</span></button>
+        <button class="settings-tile" data-s="smb">🗂️<span>SMB</span></button>
+        <button class="settings-tile" data-s="time_machine">🕰️<span>Time Machine</span></button>
+        <button class="settings-tile" data-s="wireguard">🔐<span>WireGuard</span></button>
+        <button class="settings-tile" data-s="usuarios">👤<span>Usuários</span></button>
+        <button class="settings-tile" data-s="sistema">🛠️<span>Sistema</span></button>
+      </div>
+    `;
+    modalOverlay.classList.remove('hidden');
+    modalBody.querySelectorAll('.settings-tile').forEach(btn => {
+      btn.onclick = () => renderSettingsSection(btn.dataset.s);
+    });
+  }
+
+  async function renderSettingsSection(section) {
+    try {
+      const fns = {
+        geral: renderSettingsGeral,
+        discos: renderSettingsDiscos,
+        smb: renderSettingsSmb,
+        time_machine: renderSettingsTimeMachine,
+        wireguard: renderSettingsWireguard,
+        usuarios: renderSettingsUsuarios,
+        sistema: renderSettingsSistema,
+      };
+      await fns[section]();
+    } catch (e) { showToast(e.message, true); }
+  }
+
+  async function renderSettingsGeral() {
+    const [data, tmStatus, smbStatus] = await Promise.all([
+      api('get_settings'),
+      api('time_machine_status').catch(() => null),
+      api('smb_status').catch(() => null),
+    ]);
+    const current = (data.settings.blocked_extensions || []).join(', ');
+    modalTitle.textContent = '🔒 Geral';
+    modalBody.innerHTML = `
+      ${backBtnHtml()}
+      <p class="editor-hint">Estas extensões nunca podem ser enviadas, mesmo removidas da lista abaixo: <strong>${data.always_blocked.join(', ')}</strong></p>
+      ${inputRow('Extensões extras bloqueadas (separadas por vírgula)', 'setExt', current, { placeholder: 'exe, bat, sh, jar' })}
+      <p class="editor-hint" style="margin-top:14px">
+        Time Machine: ${tmStatus && tmStatus.enabled ? '✅ Ativado' : '⭘ Desativado'} ·
+        SMB: ${smbStatus && smbStatus.enabled ? '✅ Ativado' : '⭘ Desativado'}
+        (configuráveis nas seções próprias)
+      </p>
+      <div class="modal-actions">
+        <button class="btn" id="btnTestNotif">🔔 Testar notificação</button>
+        <button class="btn btn-primary" id="btnSaveGeral">Salvar</button>
+      </div>
+    `;
+    wireBack();
+    document.getElementById('btnTestNotif').onclick = async () => {
+      try { await api('test_notification', { method: 'POST', body: new FormData() }); showToast('Notificação enviada — confira o sininho do Home Assistant.'); }
+      catch (e) { showToast(e.message, true); }
+    };
+    document.getElementById('btnSaveGeral').onclick = async () => {
+      const fd = new FormData();
+      fd.append('blocked_extensions', document.getElementById('setExt').value);
+      try { await api('update_settings', { method: 'POST', body: fd }); showToast('Configurações salvas.'); }
+      catch (e) { showToast(e.message, true); }
+    };
+  }
+
+  async function renderSettingsDiscos() {
+    const [optData, disksData] = await Promise.all([
+      api('get_addon_options'),
+      api('list_disks').catch(() => ({ devices: [] })),
+    ]);
+    const o = optData.options;
+    const labels = (o.disk_labels || []).filter(Boolean).join('\n');
+    const found = (disksData.devices || []).map(d => `
+      <li><code>${d.label || '(sem label)'}</code> — ${d.path}${d.fstype ? ' · ' + d.fstype : ''}${d.size ? ' · ' + human_filesize_js(d.size) : ''}</li>
+    `).join('') || '<li>Nenhum disco encontrado ainda — plugue um HD e recarregue esta tela.</li>';
+    modalTitle.textContent = '💽 Discos & Montagem';
+    modalBody.innerHTML = `
+      ${backBtnHtml()}
+      <p class="editor-hint">Discos detectados agora — use o nome (label) daqui na lista de montagem abaixo:</p>
+      <ul style="font-size:13px;margin:0 0 12px;padding-left:18px">${found}</ul>
+      <label style="display:block;font-size:12px;color:var(--ink-soft);margin:10px 0 4px">
+        Discos a montar (um por linha — nome, ou <code>uuid:XXXX-YYYY[:nome]</code>)
+      </label>
+      <textarea id="setDiskLabels" rows="5" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--line);border-radius:6px;font-family:inherit">${labels}</textarea>
+      <div style="margin-top:12px">
+        <button class="btn" id="btnOpenDiskUsage">📊 Ver uso de espaço e formatar</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnSaveDiscos">Salvar (reinicia o add-on)</button>
+      </div>
+    `;
+    wireBack();
+    document.getElementById('btnOpenDiskUsage').onclick = () => openDisksPanel();
+    document.getElementById('btnSaveDiscos').onclick = async () => {
+      const list = document.getElementById('setDiskLabels').value.split('\n').map(s => s.trim()).filter(Boolean);
+      await saveAddonOptionsAndRestart({ disk_labels: list });
+    };
+  }
+
+  async function renderSettingsSmb() {
+    const data = await api('get_addon_options');
+    const o = data.options;
+    modalTitle.textContent = '🗂️ SMB (acesso geral)';
+    modalBody.innerHTML = `
+      ${backBtnHtml()}
+      <p class="editor-hint">Compartilha os mesmos discos do gerenciador via SMB, com login próprio (diferente do login web).</p>
+      ${checkboxRow('Ativar SMB de uso geral', 'smbEnabled', o.smb_enabled)}
+      ${inputRow('Usuário', 'smbUser', o.smb_username)}
+      ${inputRow('Senha (em branco = manter a atual)', 'smbPass', '', { type: 'password', placeholder: o.smb_password_set ? '••••••• (já definida)' : '' })}
+      <div class="modal-actions"><button class="btn btn-primary" id="btnSaveSmb">Salvar (reinicia o add-on)</button></div>
+    `;
+    wireBack();
+    document.getElementById('btnSaveSmb').onclick = async () => {
+      await saveAddonOptionsAndRestart({
+        smb_enabled: document.getElementById('smbEnabled').checked,
+        smb_username: document.getElementById('smbUser').value.trim(),
+        smb_password: document.getElementById('smbPass').value,
+      });
+    };
+  }
+
+  async function renderSettingsTimeMachine() {
+    const data = await api('get_addon_options');
+    const o = data.options;
+    modalTitle.textContent = '🕰️ Time Machine';
+    modalBody.innerHTML = `
+      ${backBtnHtml()}
+      <p class="editor-hint">Dedica um disco inteiro ao backup do Mac (não mistura com arquivos comuns). Use o mesmo nome que aparece em "Discos &amp; Montagem".</p>
+      ${checkboxRow('Ativar Time Machine', 'tmEnabled', o.time_machine_enabled)}
+      ${inputRow('Disco dedicado (nome ou uuid:XXXX-YYYY)', 'tmDisk', o.time_machine_disk)}
+      ${inputRow('Usuário SMB', 'tmUser', o.time_machine_username)}
+      ${inputRow('Senha (em branco = manter a atual)', 'tmPass', '', { type: 'password', placeholder: o.time_machine_password_set ? '••••••• (já definida)' : '' })}
+      ${inputRow('Limite de tamanho em GB (0 = sem limite)', 'tmMax', o.time_machine_max_size_gb, { type: 'number' })}
+      <div class="modal-actions"><button class="btn btn-primary" id="btnSaveTm">Salvar (reinicia o add-on)</button></div>
+    `;
+    wireBack();
+    document.getElementById('btnSaveTm').onclick = async () => {
+      await saveAddonOptionsAndRestart({
+        time_machine_enabled: document.getElementById('tmEnabled').checked,
+        time_machine_disk: document.getElementById('tmDisk').value.trim(),
+        time_machine_username: document.getElementById('tmUser').value.trim(),
+        time_machine_password: document.getElementById('tmPass').value,
+        time_machine_max_size_gb: parseInt(document.getElementById('tmMax').value || '0', 10),
+      });
+    };
+  }
+
+  async function renderSettingsWireguard() {
+    const data = await api('get_addon_options');
+    const o = data.options;
+    modalTitle.textContent = '🔐 WireGuard';
+    modalBody.innerHTML = `
+      ${backBtnHtml()}
+      <p class="editor-hint">Cliente WireGuard: conecta este add-on num servidor VPN existente. Cole aqui os dados do <code>.conf</code> que o servidor te deu.</p>
+      ${checkboxRow('Ativar cliente WireGuard', 'wgEnabled', o.wg_enabled)}
+      ${inputRow('Chave privada (em branco = manter a atual)', 'wgPriv', '', { type: 'password', placeholder: o.wg_private_key_set ? '••••••• (já definida)' : '' })}
+      ${inputRow('Address (ex: 10.96.165.4/24)', 'wgAddr', o.wg_address)}
+      ${inputRow('DNS (opcional)', 'wgDns', o.wg_dns)}
+      ${inputRow('Chave pública do servidor', 'wgPeerPub', o.wg_peer_public_key)}
+      ${inputRow('Chave pré-compartilhada (opcional, em branco = manter)', 'wgPsk', '', { type: 'password', placeholder: o.wg_preshared_key_set ? '••••••• (já definida)' : '' })}
+      ${inputRow('Endpoint (host:porta)', 'wgEndpoint', o.wg_endpoint, { placeholder: '144.22.193.41:51820' })}
+      ${inputRow('AllowedIPs (em branco = calculado sozinho, NÃO use 0.0.0.0/0)', 'wgAllowed', o.wg_allowed_ips)}
+      ${inputRow('Keepalive em segundos (0 desliga)', 'wgKeepalive', o.wg_persistent_keepalive, { type: 'number' })}
+      <div class="modal-actions"><button class="btn btn-primary" id="btnSaveWg">Salvar (reinicia o add-on)</button></div>
+    `;
+    wireBack();
+    document.getElementById('btnSaveWg').onclick = async () => {
+      await saveAddonOptionsAndRestart({
+        wg_enabled: document.getElementById('wgEnabled').checked,
+        wg_private_key: document.getElementById('wgPriv').value,
+        wg_address: document.getElementById('wgAddr').value.trim(),
+        wg_dns: document.getElementById('wgDns').value.trim(),
+        wg_peer_public_key: document.getElementById('wgPeerPub').value.trim(),
+        wg_preshared_key: document.getElementById('wgPsk').value,
+        wg_endpoint: document.getElementById('wgEndpoint').value.trim(),
+        wg_allowed_ips: document.getElementById('wgAllowed').value.trim(),
+        wg_persistent_keepalive: parseInt(document.getElementById('wgKeepalive').value || '0', 10),
+      });
+    };
+  }
+
+  async function renderSettingsUsuarios() {
+    const data = await api('list_users');
+    const rows = data.users.map(u => `
+      <tr><td>${u.username}</td><td>${u.role === 'admin' ? 'Administrador' : 'Somente leitura'}</td>
+      <td><button class="btn btn-danger btn-del-user" data-u="${u.username}">Excluir</button></td></tr>
+    `).join('');
+    modalTitle.textContent = '👤 Usuários';
+    modalBody.innerHTML = `
+      ${backBtnHtml()}
+      <table class="disk-table"><thead><tr><th>Usuário</th><th>Papel</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <hr style="margin:14px 0;border:none;border-top:1px solid var(--line)">
+      <p class="editor-hint">Novo usuário</p>
+      ${inputRow('Usuário', 'newUserName', '')}
+      ${inputRow('Senha (mín. 8 caracteres)', 'newUserPass', '', { type: 'password' })}
+      <label style="display:block;font-size:12px;color:var(--ink-soft);margin:10px 0 4px">Papel</label>
+      <select id="newUserRole" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px">
+        <option value="viewer">Somente leitura</option>
+        <option value="admin">Administrador</option>
+      </select>
+      <div class="modal-actions"><button class="btn btn-primary" id="btnAddUser">Criar usuário</button></div>
+    `;
+    wireBack();
+    modalBody.querySelectorAll('.btn-del-user').forEach(btn => {
+      btn.onclick = async () => {
+        if (!confirm(`Excluir o usuário "${btn.dataset.u}"?`)) return;
+        const fd = new FormData();
+        fd.append('username', btn.dataset.u);
+        try { await api('delete_user', { method: 'POST', body: fd }); showToast('Usuário excluído.'); renderSettingsUsuarios(); }
+        catch (e) { showToast(e.message, true); }
+      };
+    });
+    document.getElementById('btnAddUser').onclick = async () => {
+      const fd = new FormData();
+      fd.append('username', document.getElementById('newUserName').value.trim());
+      fd.append('password', document.getElementById('newUserPass').value);
+      fd.append('role', document.getElementById('newUserRole').value);
+      try { await api('create_user', { method: 'POST', body: fd }); showToast('Usuário criado.'); renderSettingsUsuarios(); }
+      catch (e) { showToast(e.message, true); }
+    };
+  }
+
+  async function renderSettingsSistema() {
+    const data = await api('get_addon_options');
+    const o = data.options;
+    modalTitle.textContent = '🛠️ Sistema';
+    modalBody.innerHTML = `
+      ${backBtnHtml()}
+      ${checkboxRow('Monitor de disco/SMART ativo', 'sysMonitor', o.monitor_enabled)}
+      ${inputRow('Intervalo do monitor (minutos)', 'sysInterval', o.monitor_interval_minutes, { type: 'number' })}
+      ${inputRow('Alertar quando disco atingir % de uso', 'sysAlertPct', o.disk_usage_alert_percent, { type: 'number' })}
+      <hr style="margin:14px 0;border:none;border-top:1px solid var(--line)">
+      <p class="editor-hint">Pastas extras visíveis no gerenciador:</p>
+      ${checkboxRow('/config (configuração do Home Assistant)', 'sysExposeConfig', o.expose_ha_config)}
+      ${checkboxRow('/addons (outros add-ons instalados)', 'sysExposeAddons', o.expose_addons)}
+      ${checkboxRow('/backup (backups do Home Assistant)', 'sysExposeBackup', o.expose_backup)}
+      ${checkboxRow('/addon_configs (config privada de outros add-ons)', 'sysExposeAddonConfigs', o.expose_addon_configs)}
+      <div class="modal-actions"><button class="btn btn-primary" id="btnSaveSistema">Salvar (reinicia o add-on)</button></div>
+    `;
+    wireBack();
+    document.getElementById('btnSaveSistema').onclick = async () => {
+      await saveAddonOptionsAndRestart({
+        monitor_enabled: document.getElementById('sysMonitor').checked,
+        monitor_interval_minutes: parseInt(document.getElementById('sysInterval').value || '30', 10),
+        disk_usage_alert_percent: parseInt(document.getElementById('sysAlertPct').value || '90', 10),
+        expose_ha_config: document.getElementById('sysExposeConfig').checked,
+        expose_addons: document.getElementById('sysExposeAddons').checked,
+        expose_backup: document.getElementById('sysExposeBackup').checked,
+        expose_addon_configs: document.getElementById('sysExposeAddonConfigs').checked,
+      });
+    };
   }
 
   async function openFolderUsage() {
@@ -455,48 +688,56 @@
     modalBox.classList.add('modal-box-disks');
     modalTitle.textContent = '💽 Discos';
 
-    const usageHtml = (usage && usage.length) ? `
-      <div class="usage-summary">
-        ${usage.map(u => `
-          <div class="usage-item">
-            <div class="usage-item-head"><strong>${u.name}</strong><span>${u.percent}% usado — ${human_filesize_js(u.used)} de ${human_filesize_js(u.total)}</span></div>
-            <div class="usage-bar"><div class="usage-bar-fill" style="width:${Math.min(u.percent, 100)}%; background:${u.percent >= 90 ? 'var(--danger)' : 'var(--accent)'}"></div></div>
-          </div>
-        `).join('')}
-      </div>
-    ` : '';
+    const usageByName = {};
+    (usage || []).forEach(u => { usageByName[u.name] = u; });
 
-    const rows = devices.map(d => {
+    const rows = devices.map((d, idx) => {
       const sizeStr = d.size ? human_filesize_js(d.size) : '—';
       const smartBtn = d.type === 'disk' ? `<button class="btn btn-smart" data-path="${d.path}">🩺 SMART</button>` : '';
       const isTimeMachineDisk = tmStatus && tmStatus.enabled && d.label === tmStatus.disk;
       const tmBadge = isTimeMachineDisk ? ' <span title="Dedicado ao Time Machine">🕰️</span>' : '';
-      return `<tr class="disk-row">
-        <td>${d.path}</td><td>${d.label || '—'}${tmBadge}</td><td>${d.fstype || '(sem sistema de arquivos)'}</td>
-        <td>${sizeStr}</td><td>${d.mountpoint || '—'}</td>
-        <td style="white-space:nowrap">${smartBtn} <button class="btn btn-danger btn-format" data-path="${d.path}">Formatar</button></td>
-      </tr>`;
+      const u = usageByName[d.label] || usageByName[(d.mountpoint || '').split('/').pop()];
+      const usageHtml = u ? `
+        <div class="usage-item" style="margin-top:8px">
+          <div class="usage-item-head" style="flex-direction:row;justify-content:space-between">
+            <span>${u.percent}% usado</span><span>${human_filesize_js(u.used)} de ${human_filesize_js(u.total)}</span>
+          </div>
+          <div class="usage-bar"><div class="usage-bar-fill" style="width:${Math.min(u.percent, 100)}%; background:${u.percent >= 90 ? 'var(--danger)' : 'var(--accent)'}"></div></div>
+        </div>
+      ` : '<p class="editor-hint" style="margin-top:8px">Sem dado de uso (disco sem sistema de arquivos montado).</p>';
+
+      return `
+        <div class="disk-card" data-idx="${idx}">
+          <div class="disk-card-head">
+            <div>
+              <strong>${d.label || d.path}</strong>${tmBadge}
+              <span class="editor-hint">${d.path} · ${d.fstype || 'sem sistema de arquivos'} · ${sizeStr}</span>
+            </div>
+            <div style="white-space:nowrap">${smartBtn} <button class="btn btn-danger btn-format" data-path="${d.path}">Formatar</button></div>
+          </div>
+          <div class="disk-card-usage" style="display:none">${usageHtml}</div>
+        </div>
+      `;
     }).join('');
 
     modalBody.innerHTML = `
-      <div class="disks-layout">
-        <div class="disks-usage-col">
-          ${usageHtml || '<p class="editor-hint">Sem dados de uso de disco.</p>'}
-        </div>
-        <div class="disks-table-col">
-          <p class="editor-hint" style="margin-bottom:10px">
-            Discos do sistema do próprio Home Assistant (boot, dados, swap) não aparecem aqui —
-            nunca podem ser formatados por esse painel.
-          </p>
-          <table class="disk-table">
-            <thead><tr><th>Dispositivo</th><th>Nome atual</th><th>Sistema</th><th>Tamanho</th><th>Montado em</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6">Nenhum dispositivo encontrado.</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>
+      <p class="editor-hint" style="margin-bottom:10px">
+        Clique num disco pra ver o espaço usado. Discos do sistema do próprio Home Assistant
+        (boot, dados, swap) não aparecem aqui — nunca podem ser formatados por esse painel.
+      </p>
+      <div class="disks-cards">${rows || '<p>Nenhum dispositivo encontrado.</p>'}</div>
     `;
     modalOverlay.classList.remove('hidden');
     modalConfirm.style.display = 'none'; // esse modal não usa o botão de confirmar padrão
+
+    modalBody.querySelectorAll('.disk-card-head').forEach(head => {
+      head.onclick = (ev) => {
+        if (ev.target.closest('button')) return; // não expande ao clicar nos botões
+        const card = head.closest('.disk-card');
+        const panel = card.querySelector('.disk-card-usage');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      };
+    });
 
     modalBody.querySelectorAll('.btn-smart').forEach(btn => {
       btn.onclick = () => showSmartInfo(btn.dataset.path, devices, usage, tmStatus);
@@ -506,7 +747,6 @@
       btn.onclick = () => {
         const device = devices.find(d => d.path === btn.dataset.path);
         if (device) showFormatWizard(device, devices, usage, tmStatus);
-
       };
     });
   }

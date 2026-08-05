@@ -458,9 +458,56 @@ function send_ha_notification(string $notificationId, string $title, string $mes
  * TODAS as opções em /data/options.json ao iniciar o container — não precisa
  * de nenhum mecanismo próprio de exportação, só ler esse arquivo.
  */
-function get_addon_options(): array {
-    $raw = @file_get_contents('/data/options.json');
-    $decoded = $raw ? json_decode($raw, true) : null;
-    return is_array($decoded) ? $decoded : [];
+/**
+ * Grava opções do add-on via API do Supervisor (PATCH /addons/self/options).
+ * IMPORTANTE: o Supervisor substitui o objeto de opções inteiro, não faz
+ * merge — por isso sempre parte do get_addon_options() atual e sobrescreve
+ * só as chaves passadas em $partial antes de enviar, pra nunca perder o
+ * resto da configuração. Exige hassio_api: true no config.yaml.
+ */
+function save_addon_options(array $partial): bool {
+    $token = getenv('SUPERVISOR_TOKEN');
+    if (!$token) return false;
+
+    $current = get_addon_options();
+    $merged = array_merge($current, $partial);
+
+    $ch = curl_init('http://supervisor/addons/self/options');
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST => 'POST',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => json_encode(['options' => $merged], JSON_UNESCAPED_UNICODE),
+    ]);
+    $resp = curl_exec($ch);
+    $ok = curl_errno($ch) === 0;
+    curl_close($ch);
+    if (!$ok) return false;
+    $decoded = json_decode($resp ?: '', true);
+    return ($decoded['result'] ?? '') === 'ok';
+}
+
+/**
+ * Reinicia o próprio add-on (necessário pra opções novas surtirem efeito —
+ * o Supervisor grava em /data/options.json e reprocessa o config.yaml só na
+ * subida do container). Chamado depois de save_addon_options() ter sucesso;
+ * a resposta HTTP não chega a voltar pro navegador porque o container já
+ * está caindo, então o JS do lado do cliente trata isso como esperado.
+ */
+function restart_addon(): void {
+    $token = getenv('SUPERVISOR_TOKEN');
+    if (!$token) return;
+    $ch = curl_init('http://supervisor/addons/self/restart');
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST => 'POST',
+        CURLOPT_TIMEOUT => 3,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token],
+    ]);
+    @curl_exec($ch);
+    curl_close($ch);
 }
 
