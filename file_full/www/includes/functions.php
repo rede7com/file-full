@@ -459,6 +459,17 @@ function send_ha_notification(string $notificationId, string $title, string $mes
  * de nenhum mecanismo próprio de exportação, só ler esse arquivo.
  */
 /**
+ * Lê as opções configuradas do add-on. O Supervisor grava automaticamente
+ * TODAS as opções em /data/options.json ao iniciar o container — não precisa
+ * de nenhum mecanismo próprio de exportação, só ler esse arquivo.
+ */
+function get_addon_options(): array {
+    $raw = @file_get_contents('/data/options.json');
+    $decoded = $raw ? json_decode($raw, true) : null;
+    return is_array($decoded) ? $decoded : [];
+}
+
+/**
  * Grava opções do add-on via API do Supervisor (PATCH /addons/self/options).
  * IMPORTANTE: o Supervisor substitui o objeto de opções inteiro, não faz
  * merge — por isso sempre parte do get_addon_options() atual e sobrescreve
