@@ -1,5 +1,5 @@
 name: "File Manager HD PHP"
-version: "2026-1.3.1"
+version: "2026-1.3.2"
 slug: file_full
 description: "Gerenciador de arquivos PHP, com acesso ao /config e HDs Externos"
 url: "https://rede7.com.br"
@@ -102,13 +102,19 @@ options:
   # host (AllowedIPs restrito ao túnel) — navegação normal do dispositivo
   # cliente não passa pela VPN. wg_allowed_ports filtra, via iptables, quais
   # portas do host o túnel pode alcançar.
+  # Cliente WireGuard: cola aqui os dados do .conf que o servidor VPN te deu
+  # (ex: root@vpn2). wg_allowed_ips por padrão NÃO usa 0.0.0.0/0 (isso
+  # tunelaria toda a navegação do HA) — deixe em branco que o addon calcula
+  # a sub-rede /24 a partir de wg_address automaticamente.
   wg_enabled: false
-  wg_port: 51820
-  wg_endpoint_host: ""
-  wg_client_names: []
-  wg_allowed_ports: "8123"
+  wg_private_key: ""
+  wg_address: ""
   wg_dns: ""
-  wg_expose_configs: true
+  wg_peer_public_key: ""
+  wg_preshared_key: ""
+  wg_endpoint: ""
+  wg_allowed_ips: ""
+  wg_persistent_keepalive: 25
 
 schema:
   disk_labels:
@@ -130,10 +136,11 @@ schema:
   smb_username: "str"
   smb_password: "password"
   wg_enabled: bool
-  wg_port: "int(1024,65535)"
-  wg_endpoint_host: "str"
-  wg_client_names:
-    - str
-  wg_allowed_ports: "str"
+  wg_private_key: "password"
+  wg_address: "str"
   wg_dns: "str"
-  wg_expose_configs: bool
+  wg_peer_public_key: "str"
+  wg_preshared_key: "password"
+  wg_endpoint: "str"
+  wg_allowed_ips: "str"
+  wg_persistent_keepalive: "int(0,120)"
