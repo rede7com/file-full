@@ -155,7 +155,7 @@ if ${TM_ON}; then
             # de um backup de Time Machine pré-existente — sinal de que pode
             # ser um disco de uso geral, não um dedicado, exatamente o que se
             # quer evitar aqui.
-            EXISTING_ITEMS=$(find "${TM_PATH}" -mindepth 1 -maxdepth 1 ! -name 'Backups.backupdb' ! -name '*.sparsebundle' 2>/dev/null | head -1)
+            EXISTING_ITEMS=$(find "${TM_PATH}" -mindepth 1 -maxdepth 1 ! -name 'Backups.backupdb' ! -name '*.sparsebundle' -print -quit 2>/dev/null)
             if [ -n "${EXISTING_ITEMS}" ]; then
                 bashio::log.warning "'${TM_DISK}' já tem outros arquivos além de um backup do Time Machine — confira se não é um disco de uso geral por engano. Prosseguindo mesmo assim."
             fi
