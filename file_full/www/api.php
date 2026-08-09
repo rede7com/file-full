@@ -443,7 +443,7 @@ switch ($action) {
         require_admin_json();
         $opt = get_addon_options();
         // Senhas nunca voltam pro navegador — só um indicador se já tem valor.
-        foreach (['time_machine_password', 'smb_password', 'wg_private_key', 'wg_preshared_key'] as $k) {
+        foreach (['time_machine_password', 'smb_password', 'wg_private_key', 'wg_preshared_key', 'wg2_private_key', 'wg2_preshared_key'] as $k) {
             $opt[$k . '_set'] = !empty($opt[$k]);
             $opt[$k] = '';
         }
@@ -458,7 +458,7 @@ switch ($action) {
         // Campos de senha em branco = "não mexer" (o usuário não digitou nada
         // pra trocar); remove do payload pra save_addon_options() manter o
         // valor atual em vez de apagar.
-        foreach (['time_machine_password', 'smb_password', 'wg_private_key', 'wg_preshared_key'] as $k) {
+        foreach (['time_machine_password', 'smb_password', 'wg_private_key', 'wg_preshared_key', 'wg2_private_key', 'wg2_preshared_key'] as $k) {
             if (array_key_exists($k, $incoming) && $incoming[$k] === '') {
                 unset($incoming[$k]);
             }

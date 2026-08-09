@@ -556,6 +556,17 @@
       ${inputRow('Endpoint (host:porta)', 'wgEndpoint', o.wg_endpoint, { placeholder: '144.22.193.41:51820' })}
       ${inputRow('AllowedIPs (em branco = calculado sozinho, NÃO use 0.0.0.0/0)', 'wgAllowed', o.wg_allowed_ips)}
       ${inputRow('Keepalive em segundos (0 desliga)', 'wgKeepalive', o.wg_persistent_keepalive, { type: 'number' })}
+      <hr style="margin:14px 0;border:none;border-top:1px solid var(--line)">
+      <p class="editor-hint">Segundo cliente (opcional) — outro servidor VPN, independente do primeiro. Sobe como interface separada (wg1).</p>
+      ${checkboxRow('Ativar 2º cliente WireGuard', 'wg2Enabled', o.wg2_enabled)}
+      ${inputRow('Chave privada (em branco = manter a atual)', 'wg2Priv', '', { type: 'password', placeholder: o.wg2_private_key_set ? '••••••• (já definida)' : '' })}
+      ${inputRow('Address (ex: 10.96.165.5/24)', 'wg2Addr', o.wg2_address)}
+      ${inputRow('DNS (opcional)', 'wg2Dns', o.wg2_dns)}
+      ${inputRow('Chave pública do servidor', 'wg2PeerPub', o.wg2_peer_public_key)}
+      ${inputRow('Chave pré-compartilhada (opcional, em branco = manter)', 'wg2Psk', '', { type: 'password', placeholder: o.wg2_preshared_key_set ? '••••••• (já definida)' : '' })}
+      ${inputRow('Endpoint (host:porta)', 'wg2Endpoint', o.wg2_endpoint, { placeholder: '144.22.193.41:51820' })}
+      ${inputRow('AllowedIPs (em branco = calculado sozinho, NÃO use 0.0.0.0/0)', 'wg2Allowed', o.wg2_allowed_ips)}
+      ${inputRow('Keepalive em segundos (0 desliga)', 'wg2Keepalive', o.wg2_persistent_keepalive, { type: 'number' })}
       <div class="modal-actions"><button class="btn btn-primary" id="btnSaveWg">Salvar (reinicia o add-on)</button></div>
     `;
     wireBack();
@@ -570,6 +581,15 @@
         wg_endpoint: document.getElementById('wgEndpoint').value.trim(),
         wg_allowed_ips: document.getElementById('wgAllowed').value.trim(),
         wg_persistent_keepalive: parseInt(document.getElementById('wgKeepalive').value || '0', 10),
+        wg2_enabled: document.getElementById('wg2Enabled').checked,
+        wg2_private_key: document.getElementById('wg2Priv').value,
+        wg2_address: document.getElementById('wg2Addr').value.trim(),
+        wg2_dns: document.getElementById('wg2Dns').value.trim(),
+        wg2_peer_public_key: document.getElementById('wg2PeerPub').value.trim(),
+        wg2_preshared_key: document.getElementById('wg2Psk').value,
+        wg2_endpoint: document.getElementById('wg2Endpoint').value.trim(),
+        wg2_allowed_ips: document.getElementById('wg2Allowed').value.trim(),
+        wg2_persistent_keepalive: parseInt(document.getElementById('wg2Keepalive').value || '0', 10),
       });
     };
   }
