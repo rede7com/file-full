@@ -420,6 +420,38 @@ switch ($action) {
         ]);
     }
 
+    case 'wg_status': {
+        // Sem require_admin_json de propósito: é só um indicador de status
+        // pro badge do cabeçalho, visível pra qualquer usuário logado
+        // (require_login_json já rodou no topo do arquivo).
+        $options = get_addon_options();
+        $clients = [];
+        foreach (['wg0' => 'wg', 'wg1' => 'wg2'] as $iface => $prefix) {
+            $enabled = (bool) ($options[$prefix . '_enabled'] ?? false);
+            $connected = false;
+            $lastHandshake = null;
+            if ($enabled && @is_dir("/sys/class/net/{$iface}")) {
+                $out = trim((string) @shell_exec('wg show ' . escapeshellarg($iface) . ' latest-handshakes 2>/dev/null'));
+                if ($out !== '') {
+                    $parts = preg_split('/\s+/', $out);
+                    $ts = isset($parts[1]) ? (int) $parts[1] : 0;
+                    if ($ts > 0) {
+                        $lastHandshake = $ts;
+                        // Keepalive padrão é 25s; sem handshake nos últimos 3
+                        // min, considera a conexão caída mesmo com a interface up.
+                        $connected = (time() - $ts) < 180;
+                    }
+                }
+            }
+            $clients[$iface] = [
+                'enabled' => $enabled,
+                'connected' => $connected,
+                'last_handshake' => $lastHandshake,
+            ];
+        }
+        json_response(['clients' => $clients]);
+    }
+
     case 'get_settings': {
         require_admin_json();
         json_response([

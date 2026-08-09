@@ -1258,7 +1258,40 @@
     });
   }
 
+  // ---------- WireGuard status badge (cabeçalho) ----------
+  const wgStatusBadge = document.getElementById('wgStatusBadge');
+  async function refreshWgStatus() {
+    if (!wgStatusBadge) return;
+    try {
+      const data = await api('wg_status');
+      const clients = Object.values(data.clients || {}).filter(c => c.enabled);
+      if (clients.length === 0) {
+        wgStatusBadge.hidden = true;
+        return;
+      }
+      const connectedCount = clients.filter(c => c.connected).length;
+      wgStatusBadge.hidden = false;
+      if (connectedCount === clients.length) {
+        wgStatusBadge.className = 'wg-status-badge wg-status-ok';
+        wgStatusBadge.textContent = clients.length > 1 ? `🔒 VPN ativa (${connectedCount})` : '🔒 VPN ativa';
+        wgStatusBadge.title = 'Todos os clientes WireGuard configurados estão conectados.';
+      } else if (connectedCount > 0) {
+        wgStatusBadge.className = 'wg-status-badge wg-status-partial';
+        wgStatusBadge.textContent = `⚠️ VPN parcial (${connectedCount}/${clients.length})`;
+        wgStatusBadge.title = 'Nem todos os clientes WireGuard configurados estão conectados no momento.';
+      } else {
+        wgStatusBadge.className = 'wg-status-badge wg-status-down';
+        wgStatusBadge.textContent = '🔴 VPN desconectada';
+        wgStatusBadge.title = 'Cliente(s) WireGuard configurado(s), mas sem handshake recente.';
+      }
+    } catch (e) {
+      wgStatusBadge.hidden = true;
+    }
+  }
+
   // ---------- Init ----------
   const initialPath = decodeURIComponent(location.hash.replace('#', ''));
   loadDir(initialPath || '');
+  refreshWgStatus();
+  setInterval(refreshWgStatus, 30000);
 })();
