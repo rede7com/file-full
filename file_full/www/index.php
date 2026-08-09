@@ -37,6 +37,7 @@ $serverLimits = [
           $__host = preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
           $__directUrl = 'http://' . $__host . ':8099/';
         ?>
+        <span id="wgStatusBadge" class="wg-status-badge" hidden title=""></span>
         <a href="<?= htmlspecialchars($__directUrl) ?>" target="_blank" rel="noopener" class="btn-link" title="Abre fora do painel do Home Assistant">🔗 Aba separada</a>
         <span class="user-badge"><?= htmlspecialchars($user['username']) ?> · <?= $user['role'] === 'admin' ? 'admin' : 'somente leitura' ?></span>
         <a href="logout.php" class="btn-link">Sair</a>
