@@ -1,5 +1,5 @@
 name: "File Manager HD PHP"
-version: "2026-1.4.2"
+version: "2026-1.5.0"
 slug: file_full
 description: "Gerenciador de arquivos PHP, com acesso ao /config e HDs Externos"
 url: "https://rede7.com.br"
@@ -133,6 +133,19 @@ options:
   wg_endpoint: ""
   wg_allowed_ips: ""
   wg_persistent_keepalive: 25
+  # Segundo cliente WireGuard, independente do primeiro (outro servidor VPN,
+  # outra sub-rede). Mesmas regras do primeiro: wg2_allowed_ips em branco ->
+  # calculado como o /24 de wg2_address; nunca 0.0.0.0/0. Sobe como interface
+  # wg1 (o primeiro cliente continua sendo wg0, sem nenhuma mudança nele).
+  wg2_enabled: false
+  wg2_private_key: ""
+  wg2_address: ""
+  wg2_dns: ""
+  wg2_peer_public_key: ""
+  wg2_preshared_key: ""
+  wg2_endpoint: ""
+  wg2_allowed_ips: ""
+  wg2_persistent_keepalive: 25
 
 schema:
   disk_labels:
@@ -162,3 +175,12 @@ schema:
   wg_endpoint: "str"
   wg_allowed_ips: "str"
   wg_persistent_keepalive: "int(0,120)"
+  wg2_enabled: bool
+  wg2_private_key: "password"
+  wg2_address: "str"
+  wg2_dns: "str"
+  wg2_peer_public_key: "str"
+  wg2_preshared_key: "password"
+  wg2_endpoint: "str"
+  wg2_allowed_ips: "str"
+  wg2_persistent_keepalive: "int(0,120)"

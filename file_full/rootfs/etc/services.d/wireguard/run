@@ -1,11 +1,30 @@
 #!/usr/bin/with-contenv bashio
-if bashio::config.true 'wg_enabled' && [ -n "$(bashio::config 'wg_endpoint_host')" ]; then
-    bashio::log.info "Subindo interface WireGuard (wg0)..."
-    wg-quick up wg0
-    # wg-quick não tem modo foreground; mantém o serviço "vivo" pro s6 e
-    # derruba a interface de forma limpa se o container parar.
-    trap 'wg-quick down wg0; exit 0' TERM INT
-    while true; do sleep 3600 & wait $!; done
-else
+# Sobe wg0 (wg_*) e/ou wg1 (wg2_*), o que estiver com "<prefix>_enabled: true"
+# e cujo arquivo de config o cont-init.d/04-setup-wireguard.sh já gerou.
+# NOTA (fix): a versão anterior checava a chave inexistente "wg_endpoint_host"
+# (o campo real é "wg_endpoint"), então o wg-quick nunca era chamado mesmo
+# com wg_enabled=true. Agora a checagem é feita pela presença do .conf, que
+# só existe se o cont-init.d validou os campos obrigatórios com sucesso.
+
+UP_IFACES=""
+
+for IFACE in wg0 wg1; do
+    if [ -f "/etc/wireguard/${IFACE}.conf" ]; then
+        bashio::log.info "Subindo interface WireGuard (${IFACE})..."
+        if wg-quick up "${IFACE}"; then
+            UP_IFACES="${UP_IFACES} ${IFACE}"
+        else
+            bashio::log.error "Falha ao subir ${IFACE} — veja o log acima para detalhes."
+        fi
+    fi
+done
+
+if [ -z "${UP_IFACES}" ]; then
+    bashio::log.info "Nenhum cliente WireGuard habilitado/configurado."
     while true; do sleep 3600; done
 fi
+
+# wg-quick não tem modo foreground; mantém o serviço "vivo" pro s6 e derruba
+# as interfaces de forma limpa se o container parar.
+trap 'for IFACE in ${UP_IFACES}; do wg-quick down "${IFACE}"; done; exit 0' TERM INT
+while true; do sleep 3600 & wait $!; done
