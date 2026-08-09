@@ -112,6 +112,7 @@ salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
 | `wg_endpoint` | Endereço do servidor VPN, `host:porta` (ex: `144.22.193.41:51820`) |
 | `wg_allowed_ips` | Sub-rede roteada pela VPN. **Deixe em branco** — calculado sozinho como o `/24` de `wg_address`; nunca use `0.0.0.0/0` aqui (tunelaria toda a navegação do host) |
 | `wg_persistent_keepalive` | Intervalo de keepalive em segundos (0 desliga) |
+| `wg2_*` | Segundo cliente WireGuard, independente do primeiro (outro servidor, outra sub-rede) — mesmos campos acima com prefixo `wg2_` (ex: `wg2_enabled`, `wg2_address`...). Sobe como interface `wg1`, sem afetar o primeiro (`wg0`) |
 
 ## 3. Usando
 
@@ -155,6 +156,10 @@ que o servidor VPN te deu, o addon conecta nele como cliente. Por padrão
 (`wg_allowed_ips` em branco) só a sub-rede da VPN é roteada pelo túnel — a
 navegação normal do host continua fora da VPN. Verifique a conexão via SSH no
 host: `ip addr show wg0` deve mostrar o IP configurado em `wg_address`.
+
+**Segundo cliente (opcional):** preencha os campos `wg2_*` do mesmo jeito,
+com os dados de outro servidor VPN — sobe como interface separada `wg1`,
+independente da primeira. Verifique com `ip addr show wg1`.
 
 ## Atualização
 
