@@ -28,11 +28,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $username = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
-        if (attempt_login($username, $password)) {
+        if (is_login_throttled()) {
+            $error = 'Muitas tentativas de login deste endereço. Aguarde alguns minutos e tente novamente.';
+        } elseif (attempt_login($username, $password)) {
             header('Location: index.php');
             exit;
+        } else {
+            $error = 'Usuário ou senha inválidos.';
         }
-        $error = 'Usuário ou senha inválidos.';
     }
 }
 ?>

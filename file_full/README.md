@@ -199,6 +199,16 @@ Transparência sobre o que este add-on pede e por quê:
   automount ligado, ele pode "segurar" um disco antes que você consiga
   formatá-lo por aqui (erro típico: `apparently in use by the system`) —
   desligue o automount dele ou pare o add-on antes de formatar.
+- **Proteção CSRF**: toda ação de escrita (criar, apagar, mover, formatar
+  disco...) exige um token da sessão atual, gerado no login e verificado a
+  cada requisição — impede que outro site consiga disparar essas ações usando
+  a sessão de quem está logado.
+- **Limite de tentativas de login**: 5 tentativas falhas por IP em 15 minutos
+  bloqueiam novas tentativas por um tempo — mitiga força bruta, relevante
+  porque o app também fica exposto direto na porta 8099 do host, fora da
+  proteção do Ingress do HA.
+- **Cookie de sessão** marcado `HttpOnly` (inacessível via JavaScript) e
+  `SameSite=Lax` (não é enviado em requisições disparadas por outro site).
 
 ## Dados persistentes
 

@@ -11,7 +11,25 @@
  *   numa recuperação). A migração de /addon_configs pra cá, se houver dados
  *   de uma versão anterior, acontece no cont-init 02-persist-data.sh.
  */
+// httponly evita acesso ao cookie de sessão via JS (mitiga roubo por XSS);
+// samesite=Lax evita que o cookie seja enviado em requisições disparadas por
+// outro site (mitiga CSRF básico). Precisa vir antes de session_start().
+// Sem 'secure' de propósito: o app roda tanto atrás do Ingress quanto direto
+// na porta 8099 do host, ambos tipicamente em HTTP na rede local — marcar
+// 'secure' aqui quebraria o login nesse cenário comum.
+session_set_cookie_params([
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
 session_start();
+
+// Token CSRF da sessão atual: todo POST em api.php exige esse valor no header
+// X-CSRF-Token (ver api.php e assets/js/app.js). Gerado uma vez por sessão e
+// reaproveitado — não precisa girar a cada requisição.
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+}
+define('CSRF_TOKEN', $_SESSION['csrf']);
 
 date_default_timezone_set('America/Sao_Paulo');
 

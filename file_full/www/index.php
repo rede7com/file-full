@@ -106,7 +106,10 @@ $serverLimits = [
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script>window.SERVER_LIMITS = <?= json_encode($serverLimits) ?>;</script>
+  <script>
+    window.SERVER_LIMITS = <?= json_encode($serverLimits) ?>;
+    window.CSRF_TOKEN = <?= json_encode(CSRF_TOKEN) ?>;
+  </script>
   <script src="assets/js/app.js?v=<?php echo filemtime(__DIR__ . '/assets/js/app.js'); ?>"></script>
 </body>
 </html>

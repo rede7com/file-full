@@ -5,6 +5,18 @@ require_once __DIR__ . '/includes/functions.php';
 
 require_login_json();
 
+// Proteção CSRF: todo POST (as únicas ações que alteram estado) precisa
+// trazer o token da sessão atual no header X-CSRF-Token — ver CSRF_TOKEN em
+// config.php e o wrapper api() em assets/js/app.js, que já anexa o header
+// sozinho. GETs (list, search, read_file...) continuam sem exigência, são
+// idempotentes e não alteram nada.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $sentToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!hash_equals($_SESSION['csrf'] ?? '', $sentToken)) {
+        json_response(['error' => 'Sessão expirada ou inválida. Recarregue a página e tente novamente.'], 403);
+    }
+}
+
 $action = $_REQUEST['action'] ?? '';
 $isViewer = !is_admin();
 

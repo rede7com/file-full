@@ -81,13 +81,14 @@
 
   async function api(action, { method = 'GET', params = null, body = null } = {}) {
     let url = 'api.php?action=' + encodeURIComponent(action);
-    let opts = { method };
+    let opts = { method, headers: {} };
     if (method === 'GET' && params) {
       const q = new URLSearchParams(params);
       url += '&' + q.toString();
     }
     if (method === 'POST') {
       opts.body = body;
+      opts.headers['X-CSRF-Token'] = window.CSRF_TOKEN || '';
     }
     const res = await fetch(url, opts);
     const data = await res.json().catch(() => ({}));
