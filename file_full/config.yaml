@@ -1,5 +1,5 @@
 name: "File Manager HD PHP"
-version: "2026-1.5.7"
+version: "2026-1.5.8"
 slug: file_full
 description: "Gerenciador de arquivos PHP, com acesso ao /config e HDs Externos"
 url: "https://rede7.com.br"
@@ -95,9 +95,6 @@ options:
   expose_addons: false
   expose_backup: false
   expose_addon_configs: false
-  monitor_enabled: true
-  monitor_interval_minutes: 30
-  disk_usage_alert_percent: 90
   # Time Machine: desligado por padrão. time_machine_disk aceita o mesmo
   # formato de disk_labels ("NOME" ou "uuid:XXXX-YYYY[:nome]") — NÃO precisa
   # também estar em disk_labels, o Time Machine monta esse disco sozinho. O
@@ -165,9 +162,6 @@ schema:
   expose_addons: bool
   expose_backup: bool
   expose_addon_configs: bool
-  monitor_enabled: bool
-  monitor_interval_minutes: "int(5,1440)"
-  disk_usage_alert_percent: "int(50,99)"
   time_machine_enabled: bool
   time_machine_disk: "str"
   time_machine_username: "str"

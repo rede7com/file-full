@@ -76,8 +76,6 @@ RUN chmod a+x /etc/cont-init.d/00-mount-disk.sh \
     && chmod a+x /etc/cont-init.d/04-setup-wireguard.sh \
     && chmod a+x /etc/services.d/webserver/run \
     && chmod a+x /etc/services.d/webserver/finish \
-    && chmod a+x /etc/services.d/monitor/run \
-    && chmod a+x /etc/services.d/monitor/finish \
     && chmod a+x /etc/services.d/samba/run \
     && chmod a+x /etc/services.d/samba/finish \
     && chmod a+x /etc/services.d/avahi/run \

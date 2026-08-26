@@ -24,7 +24,6 @@ file_full/
 │   │   └── 03-setup-smb.sh               ← smb.conf + avahi p/ [Arquivos] (smb_enabled) e [TimeMachine] (time_machine_enabled)
 │   └── services.d/        ← processos de longa duração (s6)
 │       ├── webserver/     ← php83 -S (não Apache — ver "Decisões" abaixo)
-│       ├── monitor/       ← loop de checagem de espaço/SMART, notifica no HA
 │       ├── samba/         ← smbd, ativo se smb_enabled OU time_machine_enabled
 │       └── avahi/         ← avahi-daemon, idem
 └── www/                   ← app PHP (index/api/login/includes/assets)

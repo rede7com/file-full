@@ -22,8 +22,7 @@ Acesso pela sidebar do HA (Ingress), autenticado pela sua própria sessão do HA
 - Múltiplos discos simultâneos, identificados por label ou por UUID
 - Formatação de disco guiada (ext4/exFAT/FAT32), com proteção automática
   contra formatar partições do próprio sistema do HAOS (e swap/zram)
-- Monitoramento de saúde S.M.A.R.T. e uso de espaço por disco
-- Notificações no próprio painel do HA (disco cheio, falha de SMART)
+- Leitura de saúde S.M.A.R.T. sob demanda por disco (aba Discos & Montagem)
 - Múltiplos usuários de acesso ao app (administrador ou só leitura),
   criados e removidos direto pela aba Configurações → Usuários — separados
   de SMB e Time Machine, que têm login próprio cada um
@@ -103,9 +102,6 @@ salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
 | `expose_addons` | Mostra `/addons` (pasta de outros add-ons locais) dentro do gerenciador |
 | `expose_backup` | Mostra `/backup` (seus backups do HA) dentro do gerenciador |
 | `expose_addon_configs` | Mostra `/addon_configs` (config privada de outros add-ons) dentro do gerenciador |
-| `monitor_enabled` | Liga/desliga o monitor de saúde (espaço em disco + SMART) |
-| `monitor_interval_minutes` | Intervalo entre checagens do monitor (5–1440 min) |
-| `disk_usage_alert_percent` | A partir de qual % de uso o monitor notifica (50–99%) |
 | `time_machine_enabled` | Liga o compartilhamento SMB dedicado ao Time Machine |
 | `time_machine_disk` | Disco dedicado ao Time Machine (mesmo formato de `disk_labels`) — fica **inteiro** reservado, não é uma subpasta |
 | `time_machine_username` / `time_machine_password` | Credenciais do SMB, **separadas** do login web |
@@ -143,7 +139,7 @@ salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
   - **Usuários**: cria e remove logins do próprio app (administrador ou só
     leitura) — **não tem relação com as credenciais de SMB ou Time Machine**,
     que continuam com login próprio em cada seção.
-  - **Sistema**: monitor de SMART/espaço, pastas extras visíveis
+  - **Sistema**: pastas extras visíveis
     (`/config`, `/addons`, `/backup`, `/addon_configs`).
 
 ### Configurar o Time Machine no Mac

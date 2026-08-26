@@ -731,10 +731,6 @@
     modalTitle.textContent = '🛠️ Sistema';
     modalBody.innerHTML = `
       ${backBtnHtml()}
-      ${checkboxRow('Monitor de disco/SMART ativo', 'sysMonitor', o.monitor_enabled)}
-      ${inputRow('Intervalo do monitor (minutos)', 'sysInterval', o.monitor_interval_minutes, { type: 'number' })}
-      ${inputRow('Alertar quando disco atingir % de uso', 'sysAlertPct', o.disk_usage_alert_percent, { type: 'number' })}
-      <hr style="margin:14px 0;border:none;border-top:1px solid var(--line)">
       <p class="editor-hint">Pastas extras visíveis no gerenciador:</p>
       ${checkboxRow('/config (configuração do Home Assistant)', 'sysExposeConfig', o.expose_ha_config)}
       ${checkboxRow('/addons (outros add-ons instalados)', 'sysExposeAddons', o.expose_addons)}
@@ -745,9 +741,6 @@
     wireBack();
     document.getElementById('btnSaveSistema').onclick = async () => {
       await saveAddonOptionsAndRestart({
-        monitor_enabled: document.getElementById('sysMonitor').checked,
-        monitor_interval_minutes: parseInt(document.getElementById('sysInterval').value || '30', 10),
-        disk_usage_alert_percent: parseInt(document.getElementById('sysAlertPct').value || '90', 10),
         expose_ha_config: document.getElementById('sysExposeConfig').checked,
         expose_addons: document.getElementById('sysExposeAddons').checked,
         expose_backup: document.getElementById('sysExposeBackup').checked,
