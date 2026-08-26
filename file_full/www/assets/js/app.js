@@ -1274,6 +1274,9 @@
         items = data.items.map(it => ({ ...it, is_image: !it.is_dir && IMAGE_EXT.includes((it.name.split('.').pop() || '').toLowerCase()), ext: it.is_dir ? null : (it.name.split('.').pop() || '').toLowerCase() }));
         selection.clear();
         renderSearchResults();
+        if (data.timed_out) {
+          showToast('Busca demorou demais e foi interrompida — mostrando resultados parciais. Tente um termo mais específico.', true);
+        }
       } catch (e) { showToast(e.message, true); }
     }, 300);
   });

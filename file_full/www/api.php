@@ -194,8 +194,8 @@ switch ($action) {
         $dir = safe_path($rel);
         if (!$dir || !is_dir($dir) || $query === '') json_response(['items' => []]);
         $results = [];
-        recursive_search($dir, $query, $results);
-        json_response(['items' => $results]);
+        $timedOut = recursive_search($dir, $query, $results);
+        json_response(['items' => $results, 'timed_out' => $timedOut]);
     }
 
     case 'zip': {

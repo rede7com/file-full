@@ -136,15 +136,30 @@ function unique_name(string $dir, string $name): string {
     return $candidate;
 }
 
-/** Busca recursiva por nome de arquivo/pasta a partir de um diretório */
-function recursive_search(string $dir, string $query, array &$results, int $limit = 200): void {
-    if (count($results) >= $limit) return;
+/**
+ * Busca recursiva por nome de arquivo/pasta a partir de um diretório. Para
+ * por dois motivos, o que vier primeiro: atingir $limit resultados, ou
+ * estourar $deadline (timestamp de microtime(true) — calculado uma vez na
+ * chamada de fora, propagado pelas chamadas recursivas). Retorna true se
+ * parou por timeout (resultados parciais), false se terminou a varredura
+ * inteira (ou bateu o limite de resultados) a tempo.
+ */
+function recursive_search(string $dir, string $query, array &$results, int $limit = 200, ?float $deadline = null): bool {
+    if ($deadline === null) {
+        $deadline = microtime(true) + SEARCH_TIME_LIMIT_SECONDS;
+    }
+    if (count($results) >= $limit) return false;
+    if (microtime(true) > $deadline) return true;
+
     $items = @scandir($dir);
-    if (!$items) return;
+    if (!$items) return false;
+
     foreach ($items as $item) {
         if ($item === '.' || $item === '..') continue;
         if ($item[0] === '.') continue; // oculta arquivos de sistema
-        if (count($results) >= $limit) return;
+        if (count($results) >= $limit) return false;
+        if (microtime(true) > $deadline) return true;
+
         $full = $dir . '/' . $item;
         if (stripos($item, $query) !== false) {
             $isDir = is_dir($full);
@@ -156,10 +171,11 @@ function recursive_search(string $dir, string $query, array &$results, int $limi
                 'modified' => filemtime($full),
             ];
         }
-        if (is_dir($full)) {
-            recursive_search($full, $query, $results, $limit);
+        if (is_dir($full) && recursive_search($full, $query, $results, $limit, $deadline)) {
+            return true; // subárvore estourou o tempo — propaga o corte pra cima
         }
     }
+    return false;
 }
 
 /** Adiciona um diretório inteiro a um ZipArchive já aberto */

@@ -73,3 +73,10 @@ define('DEFAULT_EXTRA_BLOCKED_EXTENSIONS', ['exe', 'bat', 'msi', 'com', 'vbs', '
 // funciona como teto contra um ?limit= absurdo vindo do cliente.
 define('LIST_DEFAULT_PAGE_SIZE', 500);
 define('LIST_MAX_PAGE_SIZE', 2000);
+
+// Tempo máximo (segundos) que uma busca recursiva pode rodar antes de parar
+// e devolver o que já achou até ali — sem isso, uma árvore de pastas gigante
+// prende a requisição até bater o limite de 200 resultados (recursive_search)
+// ou varrer tudo, o que puder demorar bem mais do que o usuário está disposto
+// a esperar numa busca "ao digitar".
+define('SEARCH_TIME_LIMIT_SECONDS', 5);
