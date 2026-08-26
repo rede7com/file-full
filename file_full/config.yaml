@@ -1,5 +1,5 @@
 name: "File Manager HD PHP"
-version: "2026-1.5.6"
+version: "2026-1.5.7"
 slug: file_full
 description: "Gerenciador de arquivos PHP, com acesso ao /config e HDs Externos"
 url: "https://rede7.com.br"
@@ -146,6 +146,16 @@ options:
   wg2_endpoint: ""
   wg2_allowed_ips: ""
   wg2_persistent_keepalive: 25
+  # SSH real dentro do container: root, somente chave pública (nunca senha).
+  # Dá acesso de shell a tudo que o add-on já enxerga — os HDs externos
+  # (/mnt/file_full), /config (HA de verdade), /share, /backup,
+  # /addon_configs — inclusive pra configurar o HA direto por linha de
+  # comando. Sem ssh_authorized_key preenchido, o sshd nem sobe (ver
+  # 05-setup-ssh.sh). host_network:true já expõe a porta direto no host, sem
+  # precisar de entrada em "ports".
+  ssh_enabled: false
+  ssh_port: 2222
+  ssh_authorized_key: ""
 
 schema:
   disk_labels:
@@ -184,3 +194,6 @@ schema:
   wg2_endpoint: "str"
   wg2_allowed_ips: "str"
   wg2_persistent_keepalive: "int(0,120)"
+  ssh_enabled: bool
+  ssh_port: "int(1024,65535)"
+  ssh_authorized_key: "str"

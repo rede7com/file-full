@@ -442,6 +442,7 @@
         <button class="settings-tile" data-s="smb">🗂️<span>SMB</span></button>
         <button class="settings-tile" data-s="time_machine">🕰️<span>Time Machine</span></button>
         <button class="settings-tile" data-s="wireguard">🔐<span>WireGuard</span></button>
+        <button class="settings-tile" data-s="ssh">🖥️<span>SSH</span></button>
         <button class="settings-tile" data-s="usuarios">👤<span>Usuários</span></button>
         <button class="settings-tile" data-s="sistema">🛠️<span>Sistema</span></button>
       </div>
@@ -460,6 +461,7 @@
         smb: renderSettingsSmb,
         time_machine: renderSettingsTimeMachine,
         wireguard: renderSettingsWireguard,
+        ssh: renderSettingsSsh,
         usuarios: renderSettingsUsuarios,
         sistema: renderSettingsSistema,
       };
@@ -635,6 +637,50 @@
         wg2_allowed_ips: document.getElementById('wg2Allowed').value.trim(),
         wg2_persistent_keepalive: parseInt(document.getElementById('wg2Keepalive').value || '0', 10),
       });
+    };
+  }
+
+  async function renderSettingsSsh() {
+    const data = await api('get_addon_options');
+    const o = data.options;
+    modalTitle.textContent = '🖥️ SSH';
+    modalBody.innerHTML = `
+      ${backBtnHtml()}
+      <p class="editor-hint">Acesso root real ao container por SSH — mesmos HDs externos, <code>/config</code> do Home Assistant, <code>/share</code> e <code>/backup</code> que este gerenciador já enxerga. Somente chave pública, senha fica sempre desligada.</p>
+      ${checkboxRow('Ativar SSH', 'sshEnabled', o.ssh_enabled)}
+      ${inputRow('Porta', 'sshPort', o.ssh_port || 2222, { type: 'number' })}
+      <label style="display:block;font-size:12px;color:var(--ink-soft);margin:10px 0 4px">Chave pública autorizada</label>
+      <textarea id="sshKey" rows="4" placeholder="cole aqui sua chave pública (ssh-ed25519 AAAA... ou ssh-rsa AAAA...)" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--line);border-radius:6px;font-family:monospace;font-size:12px">${esc(o.ssh_authorized_key || '')}</textarea>
+      <div class="modal-actions">
+        <button class="btn" id="btnGenSsh">🔑 Gerar novo par de chaves</button>
+        <button class="btn btn-primary" id="btnSaveSsh">Salvar (reinicia o add-on)</button>
+      </div>
+      <p class="editor-hint" style="margin-top:10px">Não tem uma chave própria? "Gerar novo par" cria uma, preenche o campo acima com a pública e baixa a privada pro seu computador — ela só é mostrada uma vez, guarde em local seguro antes de clicar em Salvar.</p>
+    `;
+    wireBack();
+    document.getElementById('btnSaveSsh').onclick = async () => {
+      await saveAddonOptionsAndRestart({
+        ssh_enabled: document.getElementById('sshEnabled').checked,
+        ssh_port: parseInt(document.getElementById('sshPort').value || '2222', 10),
+        ssh_authorized_key: document.getElementById('sshKey').value.trim(),
+      });
+    };
+    document.getElementById('btnGenSsh').onclick = async () => {
+      if (!confirm('Gerar um novo par de chaves substitui a chave autorizada atual — quem usava a chave antiga perde o acesso. Continuar?')) return;
+      try {
+        const res = await api('ssh_generate_keypair', { method: 'POST', body: new FormData() });
+        document.getElementById('sshKey').value = res.public_key;
+        document.getElementById('sshEnabled').checked = true;
+        const blob = new Blob([res.private_key], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'file_full_id_ed25519';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        showToast('Chave privada baixada — guarde-a agora, ela não aparece de novo. Clique em Salvar para ativar.');
+      } catch (e) { showToast(e.message, true); }
     };
   }
 

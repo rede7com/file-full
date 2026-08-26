@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bashio
+if bashio::config.true 'ssh_enabled'; then
+    bashio::log.info "Iniciando sshd..."
+    exec /usr/sbin/sshd -D -e
+else
+    while true; do sleep 3600; done
+fi

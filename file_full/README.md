@@ -41,6 +41,9 @@ Acesso pela sidebar do HA (Ingress), autenticado pela sua própria sessão do HA
   de atualização manual dentro do app
 - Cliente WireGuard embutido: conecta este addon a um servidor VPN existente,
   com escopo restrito (não tuneliza a navegação normal do host)
+- SSH root real dentro do container, opcional e desligado por padrão —
+  somente chave pública (sem login por senha); a própria interface web gera
+  um par de chaves novo pra quem não tem um, se preferir
 
 ## Tecnologias utilizadas
 
@@ -119,6 +122,9 @@ salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
 | `wg_allowed_ips` | Sub-rede roteada pela VPN. **Deixe em branco** — calculado sozinho como o `/24` de `wg_address`; nunca use `0.0.0.0/0` aqui (tunelaria toda a navegação do host) |
 | `wg_persistent_keepalive` | Intervalo de keepalive em segundos (0 desliga) |
 | `wg2_*` | Segundo cliente WireGuard, independente do primeiro (outro servidor, outra sub-rede) — mesmos campos acima com prefixo `wg2_` (ex: `wg2_enabled`, `wg2_address`...). Sobe como interface `wg1`, sem afetar o primeiro (`wg0`) |
+| `ssh_enabled` | Liga o SSH root real dentro do container (desligado por padrão) |
+| `ssh_port` | Porta do SSH (padrão `2222`) — publicada direto no host via `host_network: true`, sem precisar mapear em `ports` |
+| `ssh_authorized_key` | Chave pública autorizada a logar. Sem ela preenchida, o SSH não sobe mesmo com `ssh_enabled: true` |
 
 ## 3. Usando
 
@@ -132,8 +138,8 @@ salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
   - **Discos & Montagem**: lista os discos encontrados agora e edita quais
     montar. Botão à parte pra ver uso de espaço e formatar (lista simples
     primeiro — clique num disco pra expandir o uso dele).
-  - **SMB**, **Time Machine**, **WireGuard**: liga/desliga e credenciais de
-    cada um, sem precisar sair do app.
+  - **SMB**, **Time Machine**, **WireGuard**, **SSH**: liga/desliga e
+    credenciais de cada um, sem precisar sair do app.
   - **Usuários**: cria e remove logins do próprio app (administrador ou só
     leitura) — **não tem relação com as credenciais de SMB ou Time Machine**,
     que continuam com login próprio em cada seção.
@@ -166,6 +172,24 @@ host: `ip addr show wg0` deve mostrar o IP configurado em `wg_address`.
 **Segundo cliente (opcional):** preencha os campos `wg2_*` do mesmo jeito,
 com os dados de outro servidor VPN — sobe como interface separada `wg1`,
 independente da primeira. Verifique com `ip addr show wg1`.
+
+### SSH real (root)
+
+Com `ssh_enabled: true` e `ssh_authorized_key` preenchido, acessa o container
+com `ssh -p <ssh_port> root@<ip-do-ha>` — mesmo usuário e mesmos mounts que o
+próprio add-on usa: os HDs externos (`/mnt/file_full`), `/config` (HA de
+verdade), `/share`, `/backup`, `/addon_configs`. Dá pra editar a configuração
+do Home Assistant direto por linha de comando, por exemplo.
+
+Duas formas de configurar a chave, pela aba Configurações → SSH:
+- **Colar sua própria chave pública** — cole no campo e salve.
+- **"Gerar novo par de chaves"** — cria uma chave ed25519 nova, preenche o
+  campo com a pública automaticamente e baixa a privada pro seu computador.
+  Ela só é mostrada uma vez (não fica salva em lugar nenhum além do arquivo
+  baixado) — guarde antes de clicar em Salvar.
+
+Login é sempre só por chave — `PasswordAuthentication` fica desligado no
+`sshd`, então não existe senha de root pra vazar ou forçar por brute force.
 
 ## Atualização
 
@@ -215,6 +239,11 @@ Transparência sobre o que este add-on pede e por quê:
   proteção do Ingress do HA.
 - **Cookie de sessão** marcado `HttpOnly` (inacessível via JavaScript) e
   `SameSite=Lax` (não é enviado em requisições disparadas por outro site).
+- **SSH (`ssh_enabled`)**: desligado por padrão. Quando ligado, é root
+  completo no container — mesmo nível de acesso que o add-on já tem
+  (`full_access` + `SYS_ADMIN`), então não é um privilégio novo, só um jeito
+  a mais de chegar nele. Só chave pública (`PasswordAuthentication no`); sem
+  `ssh_authorized_key` preenchido, o `sshd` nem inicia.
 
 ## Dados persistentes
 

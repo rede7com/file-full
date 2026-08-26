@@ -538,3 +538,31 @@ function restart_addon(): void {
     curl_close($ch);
 }
 
+/**
+ * Gera um par de chaves SSH ed25519 novo, pra quem não tem uma chave própria
+ * pronta. Roda num diretório temporário isolado (0700), lê as duas chaves e
+ * apaga os arquivos na sequência — a privada só existe em disco durante essa
+ * chamada, nunca fica persistida. O chamador é responsável por devolvê-la ao
+ * navegador uma única vez (ela não pode ser recuperada depois).
+ */
+function generate_ssh_keypair(): ?array {
+    $dir = sys_get_temp_dir() . '/ssh_keygen_' . bin2hex(random_bytes(8));
+    if (!mkdir($dir, 0700, true)) return null;
+
+    $keyPath = $dir . '/id_ed25519';
+    exec('ssh-keygen -t ed25519 -f ' . escapeshellarg($keyPath) . ' -N ' . escapeshellarg('') . ' -C ' . escapeshellarg('file-full') . ' -q 2>&1', $out, $code);
+
+    if ($code !== 0 || !file_exists($keyPath) || !file_exists($keyPath . '.pub')) {
+        foreach (glob($dir . '/*') ?: [] as $f) @unlink($f);
+        @rmdir($dir);
+        return null;
+    }
+
+    $private = file_get_contents($keyPath);
+    $public = trim(file_get_contents($keyPath . '.pub'));
+    foreach (glob($dir . '/*') ?: [] as $f) @unlink($f);
+    @rmdir($dir);
+
+    return ['private' => $private, 'public' => $public];
+}
+

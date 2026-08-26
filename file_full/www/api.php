@@ -544,6 +544,23 @@ switch ($action) {
         json_response(['ok' => true]);
     }
 
+    case 'ssh_generate_keypair': {
+        require_admin_json();
+        $kp = generate_ssh_keypair();
+        if ($kp === null) {
+            json_response(['error' => 'Falha ao gerar o par de chaves (ssh-keygen indisponível?).'], 500);
+        }
+        // A pública já entra em vigor (autorizada); ssh_enabled é ligado
+        // junto pra evitar o passo extra de "gerei a chave mas esqueci de
+        // ativar". Não reinicia sozinho — o front-end mostra a chave privada
+        // pra download antes de reiniciar, pra nunca reiniciar sem o usuário
+        // ter tido a chance de guardá-la.
+        if (!save_addon_options(['ssh_authorized_key' => $kp['public'], 'ssh_enabled' => true])) {
+            json_response(['error' => 'Chave gerada, mas falhou ao salvar nas opções do add-on.'], 500);
+        }
+        json_response(['ok' => true, 'private_key' => $kp['private'], 'public_key' => $kp['public']]);
+    }
+
     case 'list_users': {
         require_admin_json();
         $users = array_map(fn($u) => [

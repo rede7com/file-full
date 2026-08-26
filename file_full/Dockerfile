@@ -24,7 +24,8 @@ RUN apk add --no-cache \
     samba \
     avahi \
     wireguard-tools \
-    iptables
+    iptables \
+    openssh
 
 # Avahi normalmente precisa de dbus pra funcionar, mas isso significaria mais
 # um serviço rodando no container — enable-dbus=no deixa ele operar sozinho,
@@ -82,4 +83,7 @@ RUN chmod a+x /etc/cont-init.d/00-mount-disk.sh \
     && chmod a+x /etc/services.d/avahi/run \
     && chmod a+x /etc/services.d/avahi/finish \
     && chmod a+x /etc/services.d/wireguard/run \
-    && chmod a+x /etc/services.d/wireguard/finish
+    && chmod a+x /etc/services.d/wireguard/finish \
+    && chmod a+x /etc/cont-init.d/05-setup-ssh.sh \
+    && chmod a+x /etc/services.d/ssh/run \
+    && chmod a+x /etc/services.d/ssh/finish
