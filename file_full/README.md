@@ -12,6 +12,9 @@ Acesso pela sidebar do HA (Ingress), autenticado pela sua própria sessão do HA
 
 - Navegação de arquivos com upload (até 8GB por arquivo), download, zip/unzip,
   renomear, mover, copiar, exclusão
+- Listagem de pastas paginada (lotes de até 500 itens, botão "Carregar mais")
+  — pastas com milhares de arquivos abrem rápido em vez de travar montando a
+  lista inteira de uma vez
 - Editor de texto embutido (edita qualquer arquivo direto pelo navegador)
 - Múltiplos discos simultâneos, identificados por label ou por UUID
 - Formatação de disco guiada (ext4/exFAT/FAT32), com proteção automática

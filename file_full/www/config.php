@@ -66,3 +66,10 @@ define('ALWAYS_BLOCKED_EXTENSIONS', []);
 
 // Lista padrão de extensões extras bloqueadas (editável depois pela interface, fica em data/settings.json)
 define('DEFAULT_EXTRA_BLOCKED_EXTENSIONS', ['exe', 'bat', 'msi', 'com', 'vbs', 'jar', 'sh']);
+
+// Paginação da listagem de pastas: evita estatar (tamanho, data, permissões)
+// milhares de arquivos de uma vez numa pasta grande — só a página pedida paga
+// esse custo (ver o action 'list' em api.php). LIST_MAX_PAGE_SIZE também
+// funciona como teto contra um ?limit= absurdo vindo do cliente.
+define('LIST_DEFAULT_PAGE_SIZE', 500);
+define('LIST_MAX_PAGE_SIZE', 2000);

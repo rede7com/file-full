@@ -31,15 +31,40 @@ switch ($action) {
     case 'list': {
         $rel = $_GET['path'] ?? '';
         $showHidden = ($_GET['show_hidden'] ?? '') === '1';
+        $offset = max(0, (int) ($_GET['offset'] ?? 0));
+        $limit = (int) ($_GET['limit'] ?? LIST_DEFAULT_PAGE_SIZE);
+        $limit = max(1, min($limit, LIST_MAX_PAGE_SIZE));
+
         $dir = safe_path($rel);
         if (!$dir || !is_dir($dir)) json_response(['error' => 'Pasta não encontrada.'], 404);
 
-        $items = [];
+        // 1ª passada: só nome + is_dir (barato — sem filesize/filemtime/fileperms).
+        // Precisa ser sobre a listagem inteira pra manter a ordenação global
+        // "pastas primeiro, depois alfabética" correta entre páginas — do
+        // contrário paginar intercalaria pastas e arquivos entre uma página e
+        // outra.
+        $entries = [];
         foreach (scandir($dir) as $name) {
             if ($name === '.' || $name === '..') continue;
             if (!$showHidden && $name[0] === '.') continue; // oculta arquivos de sistema (.htaccess, .gitkeep etc.)
+            $entries[] = ['name' => $name, 'is_dir' => is_dir($dir . '/' . $name)];
+        }
+        usort($entries, function ($a, $b) {
+            if ($a['is_dir'] !== $b['is_dir']) return $a['is_dir'] ? -1 : 1;
+            return strcasecmp($a['name'], $b['name']);
+        });
+
+        $total = count($entries);
+        $page = array_slice($entries, $offset, $limit);
+
+        // 2ª passada: os dados "caros" (tamanho, data, permissões) só pros
+        // itens da página atual — é isso que faz uma pasta com milhares de
+        // arquivos não estatar tudo de uma vez só pra mostrar 500.
+        $items = [];
+        foreach ($page as $entry) {
+            $name = $entry['name'];
+            $isDir = $entry['is_dir'];
             $full = $dir . '/' . $name;
-            $isDir = is_dir($full);
             $items[] = [
                 'name' => $name,
                 'path' => relative_path($full),
@@ -52,16 +77,15 @@ switch ($action) {
                 'hidden' => $name[0] === '.',
             ];
         }
-        // Pastas primeiro, depois ordem alfabética
-        usort($items, function ($a, $b) {
-            if ($a['is_dir'] !== $b['is_dir']) return $a['is_dir'] ? -1 : 1;
-            return strcasecmp($a['name'], $b['name']);
-        });
 
         json_response([
             'path' => relative_path($dir),
             'items' => $items,
             'can_write' => !$isViewer,
+            'total' => $total,
+            'offset' => $offset,
+            'limit' => $limit,
+            'has_more' => ($offset + count($items)) < $total,
         ]);
     }
 

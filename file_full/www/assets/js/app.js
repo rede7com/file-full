@@ -52,6 +52,14 @@
   let lastClickedIndex = null;
   let showHidden = false;
 
+  // Paginação da listagem (ver action 'list' em api.php). listOffset é
+  // sempre igual ao número de itens já carregados na pasta atual — cada
+  // "Carregar mais" pede a partir dali.
+  let listOffset = 0;
+  let listTotal = 0;
+  let listHasMore = false;
+  let listLoading = false;
+
   // ---------- Helpers ----------
   function fmtSize(bytes) {
     if (bytes === null || bytes === undefined) return '';
@@ -103,9 +111,12 @@
   // ---------- Navigation ----------
   async function loadDir(path) {
     try {
-      const data = await api('list', { params: { path, show_hidden: showHidden ? '1' : '0' } });
+      const data = await api('list', { params: { path, show_hidden: showHidden ? '1' : '0', offset: 0 } });
       currentPath = data.path;
       items = data.items;
+      listOffset = data.items.length;
+      listTotal = data.total;
+      listHasMore = data.has_more;
       selection.clear();
       updateToolbarState();
       renderBreadcrumb();
@@ -115,6 +126,36 @@
       showToast(e.message, true);
     }
   }
+
+  async function loadMoreItems() {
+    if (listLoading || !listHasMore) return;
+    listLoading = true;
+    renderLoadMoreRow();
+    try {
+      const data = await api('list', { params: { path: currentPath, show_hidden: showHidden ? '1' : '0', offset: listOffset } });
+      items = items.concat(data.items);
+      listOffset += data.items.length;
+      listTotal = data.total;
+      listHasMore = data.has_more;
+      renderGrid();
+    } catch (e) {
+      showToast(e.message, true);
+    } finally {
+      listLoading = false;
+    }
+  }
+
+  function renderLoadMoreRow() {
+    const row = document.getElementById('loadMoreRow');
+    const info = document.getElementById('loadMoreInfo');
+    const btn = document.getElementById('btnLoadMore');
+    if (!listHasMore) { row.classList.add('hidden'); return; }
+    row.classList.remove('hidden');
+    info.textContent = `Mostrando ${items.length} de ${listTotal}`;
+    btn.disabled = listLoading;
+    btn.textContent = listLoading ? 'Carregando...' : 'Carregar mais';
+  }
+  document.getElementById('btnLoadMore').onclick = () => loadMoreItems();
 
   function renderBreadcrumb() {
     breadcrumb.innerHTML = '';
@@ -144,6 +185,7 @@
     fileGrid.innerHTML = '';
     if (items.length === 0) {
       fileGrid.innerHTML = '<div class="empty-state">Esta pasta está vazia.<br>Arraste arquivos ou pastas aqui para enviar.</div>';
+      renderLoadMoreRow();
       return;
     }
     items.forEach((item, idx) => {
@@ -192,6 +234,7 @@
 
       fileGrid.appendChild(el);
     });
+    renderLoadMoreRow();
   }
 
   function handleItemClick(e, item, idx) {
@@ -1237,6 +1280,7 @@
 
   function renderSearchResults() {
     fileGrid.innerHTML = '';
+    document.getElementById('loadMoreRow').classList.add('hidden'); // busca não é paginada
     if (items.length === 0) {
       fileGrid.innerHTML = '<div class="empty-state">Nenhum resultado encontrado.</div>';
       return;

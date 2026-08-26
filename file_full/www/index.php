@@ -70,6 +70,10 @@ $serverLimits = [
 
     <div id="dropZone" class="drop-zone">
       <div id="fileGrid" class="file-grid"></div>
+      <div id="loadMoreRow" class="load-more-row hidden">
+        <button id="btnLoadMore" class="btn">Carregar mais</button>
+        <span id="loadMoreInfo" class="editor-hint"></span>
+      </div>
       <div id="dropOverlay" class="drop-overlay">Solte aqui para enviar</div>
     </div>
 
