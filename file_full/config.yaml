@@ -1,5 +1,5 @@
 name: "File Manager HD PHP"
-version: "2026-1.5.9"
+version: "2026-1.6.0"
 slug: file_full
 description: "Gerenciador de arquivos PHP, com acesso ao /config e HDs Externos"
 url: "https://rede7.com.br"
@@ -111,6 +111,12 @@ options:
   # Time Machine, que é um disco inteiro dedicado só a isso. Usuário/senha
   # aqui são exclusivos do SMB, diferentes do login web e do Time Machine.
   smb_enabled: false
+  # Nome que a máquina mostra na rede: no Windows/"Rede", no Finder do Mac e
+  # no anúncio Bonjour (<nome>.local). Sem isso, cai no hostname feio que o
+  # Supervisor gera pro container (ex: "08a40d41-file-full"). Aceita espaços
+  # (viram "server string" livre); pro NetBIOS e pro nome .local o add-on
+  # sanitiza sozinho (só letras/números/hífen, NetBIOS cortado em 15 chars).
+  smb_server_name: "file-full"
   smb_username: "arquivos"
   smb_password: ""
   # WireGuard: cliente conecta em wg_endpoint_host:wg_port e só enxerga este
@@ -168,6 +174,7 @@ schema:
   time_machine_password: "password"
   time_machine_max_size_gb: "int(0,100000)"
   smb_enabled: bool
+  smb_server_name: "str?"
   smb_username: "str"
   smb_password: "password"
   wg_enabled: bool

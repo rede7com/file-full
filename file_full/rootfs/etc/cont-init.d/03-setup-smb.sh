@@ -39,15 +39,40 @@ if ! ${SMB_ON} && ! ${TM_ON}; then
     exit 0
 fi
 
+# --- Nome da máquina na rede -------------------------------------------------
+# O hostname do container é gerado pelo Supervisor (ex: "08a40d41-file-full")
+# e vaza pro NetBIOS (Windows) e pro %h do Avahi (Finder/Bonjour). Aqui a
+# gente força um nome legível, vindo da opção smb_server_name:
+#   server string -> texto livre, aceita espaços (é o "rótulo bonito")
+#   netbios name  -> Windows exige <=15 chars, sem espaços/símbolos
+#   host-name Avahi + nome .local -> label DNS: letras/números/hífen
+RAW_NAME=$(bashio::config 'smb_server_name')
+[ -z "${RAW_NAME}" ] || [ "${RAW_NAME}" = "null" ] && RAW_NAME="file-full"
+SERVER_STRING="${RAW_NAME}"
+NETBIOS_NAME=$(echo "${RAW_NAME}" | tr ' ' '-' | tr -cd 'A-Za-z0-9_-' | cut -c1-15 | sed 's/^-*//;s/-*$//')
+AVAHI_NAME=$(echo "${RAW_NAME}" | tr ' _' '--' | tr -cd 'A-Za-z0-9-' | cut -c1-63 | sed 's/^-*//;s/-*$//')
+[ -z "${NETBIOS_NAME}" ] && NETBIOS_NAME="file-full"
+[ -z "${AVAHI_NAME}" ] && AVAHI_NAME="file-full"
+
+# Avahi (mDNS/Bonjour): sobrescreve o host-name pra publicar "<AVAHI_NAME>.local"
+# e fazer o %h dos .service (SMB, SSH, SFTP) mostrar o nome bonito. O
+# avahi-daemon só sobe depois dos cont-init.d, então editar aqui basta.
+if [ -f /etc/avahi/avahi-daemon.conf ]; then
+    sed -i "s/^#*host-name=.*/host-name=${AVAHI_NAME}/" /etc/avahi/avahi-daemon.conf
+    grep -q '^host-name=' /etc/avahi/avahi-daemon.conf || \
+        sed -i "s/^\[server\]/[server]\nhost-name=${AVAHI_NAME}/" /etc/avahi/avahi-daemon.conf
+fi
+
 mkdir -p /etc/samba
-cat > /etc/samba/smb.conf << 'EOF'
+cat > /etc/samba/smb.conf << EOF
 [global]
     server min protocol = SMB2
     server max protocol = SMB3
     workgroup = WORKGROUP
     security = user
     map to guest = never
-    server string = File Manager HD PHP
+    netbios name = ${NETBIOS_NAME}
+    server string = ${SERVER_STRING}
     log level = 1
     load printers = no
     printcap name = /dev/null

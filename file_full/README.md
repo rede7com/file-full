@@ -107,6 +107,7 @@ salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
 | `time_machine_username` / `time_machine_password` | Credenciais do SMB, **separadas** do login web |
 | `time_machine_max_size_gb` | Limite de tamanho do backup (0 = sem limite) |
 | `smb_enabled` | Liga o compartilhamento SMB de uso geral (acesso normal aos discos, não o dedicado ao Time Machine) |
+| `smb_server_name` | Nome da máquina na rede (Windows, Finder, Bonjour `<nome>.local`). Vazio = usa o hostname feio do container. Aceita espaços; NetBIOS/`.local` são sanitizados automaticamente |
 | `smb_username` / `smb_password` | Credenciais do SMB de uso geral, **separadas** do login web e das do Time Machine |
 | `wg_enabled` | Liga o cliente WireGuard (conecta este addon a um servidor VPN existente) |
 | `wg_private_key` | Chave privada do cliente (vem do `.conf` gerado pelo servidor VPN) |
