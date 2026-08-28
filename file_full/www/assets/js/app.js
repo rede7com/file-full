@@ -546,6 +546,8 @@
       ${backBtnHtml()}
       <p class="editor-hint">Compartilha os mesmos discos do gerenciador via SMB, com login próprio (diferente do login web).</p>
       ${checkboxRow('Ativar SMB de uso geral', 'smbEnabled', o.smb_enabled)}
+      ${inputRow('Nome da máquina na rede (Windows, Finder, Bonjour <nome>.local)', 'smbName', o.smb_server_name || 'file-full')}
+      <p class="editor-hint" style="margin-top:4px">Vale também pro anúncio do Time Machine e do SSH. Em branco = usa o hostname interno do container (feio). Aceita espaços; NetBIOS e <code>.local</code> são ajustados sozinhos.</p>
       ${inputRow('Usuário', 'smbUser', o.smb_username)}
       ${inputRow('Senha (em branco = manter a atual)', 'smbPass', '', { type: 'password', placeholder: o.smb_password_set ? '••••••• (já definida)' : '' })}
       <div class="modal-actions"><button class="btn btn-primary" id="btnSaveSmb">Salvar (reinicia o add-on)</button></div>
@@ -554,6 +556,7 @@
     document.getElementById('btnSaveSmb').onclick = async () => {
       await saveAddonOptionsAndRestart({
         smb_enabled: document.getElementById('smbEnabled').checked,
+        smb_server_name: document.getElementById('smbName').value.trim(),
         smb_username: document.getElementById('smbUser').value.trim(),
         smb_password: document.getElementById('smbPass').value,
       });
