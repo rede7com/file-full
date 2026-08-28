@@ -2,8 +2,6 @@
 
 ## 2026-1.6.2
 
-- 📝 Adicionado este histórico de versões (changelog) — antes o Home Assistant
-  mostrava "No changelog found".
 - 🐛 Pequenas correções de bugs e 🚀 melhorias gerais.
 
 ## 2026-1.6.1
