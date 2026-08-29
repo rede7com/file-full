@@ -3,16 +3,22 @@
  * Autenticação, sessão e controle de papéis (admin / viewer)
  */
 
-// Limite de tentativas de login por IP: bloqueia depois de 5 falhas em 15
-// minutos, pra dificultar força bruta contra o app exposto direto na porta
-// 8099 do host (sem a proteção do Ingress do HA). Guardado em /data (mesmo
-// lugar de usuários/configurações), sobrevive a reinícios do add-on.
+// Limite de tentativas de login: bloqueia depois de 5 falhas em 15 minutos,
+// pra dificultar força bruta contra o app exposto direto na porta 8099 do
+// host (sem a proteção do Ingress do HA). Guardado em /data (mesmo lugar de
+// usuários/configurações), sobrevive a reinícios do add-on.
+//
+// A chave é "usuário + IP", nunca só o IP: atrás do Ingress do HA TODAS as
+// requisições chegam com o REMOTE_ADDR do proxy do Supervisor — contar só por
+// IP fazia 5 erros de digitação de uma pessoa trancarem o login de todo mundo
+// (e, do outro lado, permitia varrer vários usuários gastando uma cota só).
+// Com a chave composta, o bloqueio atinge exatamente quem está errando.
 define('LOGIN_ATTEMPTS_FILE', DATA_DIR . '/login_attempts.json');
 define('LOGIN_MAX_ATTEMPTS', 5);
 define('LOGIN_WINDOW_SECONDS', 900);
 
-function login_throttle_key(): string {
-    return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+function login_throttle_key(string $username): string {
+    return strtolower(trim($username)) . '@' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
 }
 
 function load_login_attempts(): array {
@@ -21,29 +27,42 @@ function load_login_attempts(): array {
     return is_array($data) ? $data : [];
 }
 
+/**
+ * Grava o mapa de tentativas descartando, na mesma passada, toda chave cuja
+ * janela já venceu. Sem essa limpeza o arquivo só crescia — cada usuário/IP
+ * que um dia errou a senha ficava lá pra sempre, dentro de /data, que entra
+ * no backup do HA. LOCK_EX evita que duas tentativas simultâneas se
+ * sobrescrevam.
+ */
 function save_login_attempts(array $data): void {
-    @file_put_contents(LOGIN_ATTEMPTS_FILE, json_encode($data));
+    $cutoff = time() - LOGIN_WINDOW_SECONDS;
+    $clean = [];
+    foreach ($data as $key => $timestamps) {
+        $recent = array_values(array_filter((array) $timestamps, fn($ts) => $ts > $cutoff));
+        if ($recent) $clean[$key] = $recent;
+    }
+    @file_put_contents(LOGIN_ATTEMPTS_FILE, json_encode($clean), LOCK_EX);
 }
 
-/** true se o IP atual já bateu no limite de tentativas na janela recente */
-function is_login_throttled(): bool {
+/** true se este usuário, vindo deste IP, já bateu no limite na janela recente */
+function is_login_throttled(string $username): bool {
     $data = load_login_attempts();
-    $recent = array_filter($data[login_throttle_key()] ?? [], fn($ts) => $ts > time() - LOGIN_WINDOW_SECONDS);
+    $recent = array_filter($data[login_throttle_key($username)] ?? [], fn($ts) => $ts > time() - LOGIN_WINDOW_SECONDS);
     return count($recent) >= LOGIN_MAX_ATTEMPTS;
 }
 
-function register_failed_login(): void {
+function register_failed_login(string $username): void {
     $data = load_login_attempts();
-    $key = login_throttle_key();
+    $key = login_throttle_key($username);
     $recent = array_filter($data[$key] ?? [], fn($ts) => $ts > time() - LOGIN_WINDOW_SECONDS);
     $recent[] = time();
     $data[$key] = array_values($recent);
     save_login_attempts($data);
 }
 
-function clear_login_attempts(): void {
+function clear_login_attempts(string $username): void {
     $data = load_login_attempts();
-    unset($data[login_throttle_key()]);
+    unset($data[login_throttle_key($username)]);
     save_login_attempts($data);
 }
 
@@ -97,19 +116,28 @@ function delete_user(string $username): bool {
 }
 
 function attempt_login(string $username, string $password): bool {
-    if (is_login_throttled()) {
+    if (is_login_throttled($username)) {
         return false;
     }
     $user = find_user($username);
     if (!$user || !password_verify($password, $user['password_hash'])) {
-        register_failed_login();
+        register_failed_login($username);
+        audit_log('login_failed', ['username' => $username], false);
         return false;
     }
-    clear_login_attempts();
+    clear_login_attempts($username);
+
+    // Troca o id da sessão ao autenticar (session fixation): sem isso, quem
+    // conseguisse fixar um id de sessão na vítima antes do login — trivial na
+    // rede local, já que a porta 8099 fala HTTP puro — continuava dono da
+    // mesma sessão depois que ela virasse uma sessão autenticada.
+    session_regenerate_id(true);
+
     $_SESSION['user'] = [
         'username' => $user['username'],
         'role' => $user['role'],
     ];
+    audit_log('login', ['username' => $user['username'], 'role' => $user['role']]);
     return true;
 }
 

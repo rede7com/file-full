@@ -1,8 +1,9 @@
 <?php
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/auth.php';
 
+send_security_headers(false);
 require_login();
 
 $path = $_GET['path'] ?? '';
@@ -11,6 +12,15 @@ $full = safe_path($path);
 
 if (!$full || !is_file($full) || !is_image_file($full)) {
     http_response_code(404);
+    exit;
+}
+
+// Sem a extensão gd não dá pra gerar miniatura nenhuma. Sai com 415 (o JS
+// cai no ícone do tipo, que é o mesmo caminho de uma imagem corrompida) em
+// vez de deixar estourar um fatal error — que devolvia 500 com stack trace
+// e o caminho absoluto do arquivo no corpo da resposta.
+if (!function_exists('imagecreatetruecolor')) {
+    http_response_code(415);
     exit;
 }
 
@@ -43,6 +53,11 @@ if (!file_exists($cacheFile)) {
     imagejpeg($thumb, $cacheFile, 82);
     imagedestroy($src);
     imagedestroy($thumb);
+
+    // Só checa o teto quando de fato acabou de gravar uma miniatura nova —
+    // varrer o cache a cada requisição de imagem já cacheada seria caro à toa
+    // numa pasta com centenas de fotos.
+    prune_thumb_cache();
 }
 
 header('Content-Type: image/jpeg');

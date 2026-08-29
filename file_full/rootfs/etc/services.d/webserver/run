@@ -3,6 +3,20 @@
 # root (trava do próprio binário), e root é necessário aqui pra gravar em
 # pastas montadas do host (/config, discos ext4) sem depender de quem é o
 # dono original dos arquivos. Ver README/histórico do add-on para detalhes.
-bashio::log.info "Iniciando servidor PHP embutido na porta 8099..."
+#
+# PHP_CLI_SERVER_WORKERS é o que tira o maior gargalo do add-on: o servidor
+# embutido é single-threaded por padrão, então UMA requisição lenta — um
+# upload de vários GB, um `du` numa pasta gigante, o download de uma pasta
+# sendo compactada — congelava o app inteiro pra todo mundo até terminar.
+# Com workers, cada requisição pega um processo próprio. O número é conforme
+# a CPU disponível (mínimo 4), com teto de 12 pra não estourar a memória num
+# Raspberry Pi.
+CPUS=$(nproc 2>/dev/null || echo 2)
+WORKERS=$((CPUS * 2))
+[ "${WORKERS}" -lt 4 ] && WORKERS=4
+[ "${WORKERS}" -gt 12 ] && WORKERS=12
+export PHP_CLI_SERVER_WORKERS="${WORKERS}"
+
+bashio::log.info "Iniciando servidor PHP embutido na porta 8099 (${WORKERS} workers)..."
 cd /var/www/html
 exec php83 -S 0.0.0.0:8099 -t /var/www/html

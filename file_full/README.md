@@ -11,7 +11,17 @@ Acesso pela sidebar do HA (Ingress), autenticado pela sua própria sessão do HA
 ## Recursos
 
 - Navegação de arquivos com upload (até 8GB por arquivo), download, zip/unzip,
-  renomear, mover, copiar, exclusão
+  renomear, mover, copiar, exclusão — em grade ou em lista, com ordenação por
+  nome, tamanho ou data
+- Visualizador embutido: imagem, vídeo, áudio, PDF e Markdown abrem direto no
+  app (setas ← → passam pelos arquivos do mesmo tipo), sem precisar baixar
+- Lixeira: excluir move para uma pasta oculta dentro do próprio disco, com
+  restauração em um clique e expurgo automático (padrão: 30 dias)
+- Links de compartilhamento temporários por arquivo, com validade definida e
+  revogação a qualquer momento
+- Log de auditoria de toda ação de escrita (quem fez, o quê e quando)
+- Tema claro/escuro, acompanhando o do sistema ou fixado no botão do cabeçalho
+- Atalhos de teclado: `Delete`, `F2`, `Ctrl+A`, `Ctrl+C/X/V`, `Esc`, `/` busca
 - Listagem de pastas paginada (lotes de até 500 itens, botão "Carregar mais")
   — pastas com milhares de arquivos abrem rápido em vez de travar montando a
   lista inteira de uma vez
@@ -130,8 +140,18 @@ salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
   própria — não depende de estar dentro do dashboard.
 - **Uso de espaço** (📊): analisa o que está ocupando espaço na pasta atual.
 - **Editor** (📝): clique num arquivo → Editar. `Ctrl/Cmd+S` salva sem fechar.
+- **Visualizar**: clique duplo numa imagem, vídeo, áudio, PDF ou `.md` abre no
+  visualizador; ← → passam pelos arquivos do mesmo tipo na pasta, `Esc` fecha.
+- **Lixeira** (🗑️): itens excluídos ficam recuperáveis por 30 dias (ajustável
+  em Configurações → Geral; `0` mantém para sempre). A lixeira mora dentro de
+  cada disco (`.file_full_trash`), então continua ocupando o espaço do próprio
+  disco até ser expurgada.
+- **Compartilhar**: botão direito num arquivo → "Criar link temporário". O
+  link funciona sem login, mas **só pela porta 8099** — dentro do painel do HA
+  qualquer URL do add-on exige a sessão do Home Assistant.
 - **Configurações** (⚙️): hub com uma seção por assunto —
-  - **Geral**: extensões bloqueadas no upload, teste de notificação.
+  - **Geral**: extensões bloqueadas no upload, prazo de expurgo da lixeira,
+    teste de notificação.
   - **Discos & Montagem**: lista os discos encontrados agora e edita quais
     montar. Botão à parte pra ver uso de espaço e formatar (lista simples
     primeiro — clique num disco pra expandir o uso dele).
@@ -140,6 +160,9 @@ salvar ali já grava via API do Supervisor e reinicia o add-on sozinho. Exige
   - **Usuários**: cria e remove logins do próprio app (administrador ou só
     leitura) — **não tem relação com as credenciais de SMB ou Time Machine**,
     que continuam com login próprio em cada seção.
+  - **Links ativos**: compartilhamentos temporários em vigor, com opção de
+    copiar o link ou revogá-lo.
+  - **Auditoria**: histórico de todas as ações de escrita, com autor e data.
   - **Sistema**: pastas extras visíveis
     (`/config`, `/addons`, `/backup`, `/addon_configs`).
 
@@ -228,14 +251,36 @@ Transparência sobre o que este add-on pede e por quê:
   desligue o automount dele ou pare o add-on antes de formatar.
 - **Proteção CSRF**: toda ação de escrita (criar, apagar, mover, formatar
   disco...) exige um token da sessão atual, gerado no login e verificado a
-  cada requisição — impede que outro site consiga disparar essas ações usando
-  a sessão de quem está logado.
-- **Limite de tentativas de login**: 5 tentativas falhas por IP em 15 minutos
-  bloqueiam novas tentativas por um tempo — mitiga força bruta, relevante
-  porque o app também fica exposto direto na porta 8099 do host, fora da
-  proteção do Ingress do HA.
-- **Cookie de sessão** marcado `HttpOnly` (inacessível via JavaScript) e
-  `SameSite=Lax` (não é enviado em requisições disparadas por outro site).
+  cada requisição — inclusive no próprio formulário de login e no upload.
+- **Content-Security-Policy** com nonce por requisição: mesmo que algum dado
+  vindo do disco escape do escapamento, script injetado não executa. Junto
+  vão `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options`
+  (`frame-ancestors 'self'` permite o Ingress e barra outros sites) e
+  `Permissions-Policy`.
+- **Nomes de arquivo são sempre tratados como texto**, nunca como HTML — um
+  arquivo com HTML no nome (criável por SMB, por upload ou por qualquer
+  processo com acesso ao disco) não executa nada na interface.
+- **Caminhos validados pelo diretório pai já resolvido**: um symlink apontando
+  pra fora da área do gerenciador não permite gravar fora dela, mesmo quando o
+  arquivo de destino ainda não existe (caso do upload).
+- **Cabeçalho de download codificado** (RFC 5987): nome de arquivo com aspas
+  ou quebra de linha não injeta cabeçalhos na resposta.
+- **Limite de tentativas de login**: 5 falhas por usuário+IP em 15 minutos.
+  A chave inclui o usuário de propósito — atrás do Ingress todas as
+  requisições chegam com o IP do proxy do Supervisor, e contar só por IP
+  trancaria o login de todo mundo por causa de uma pessoa.
+- **Sessão**: id trocado no login (session fixation), cookie `HttpOnly`,
+  `SameSite=Lax` e `Secure` quando servido por HTTPS.
+- **Extração de ZIP** valida cada entrada segmento a segmento — caminho
+  absoluto ou que suba além da pasta de destino é recusado.
+- **Lixeira e auditoria**: exclusão é reversível por padrão e toda ação de
+  escrita fica registrada em `/data/audit.log` com autor, data e alvo.
+- **Discos montados** não podem ser excluídos nem renomeados pela interface.
+- **Links de compartilhamento**: só arquivos (nunca pastas), token de 24 bytes
+  aleatórios, validade máxima de 30 dias, revogáveis, e cada uso é registrado
+  na auditoria. Arquivos são servidos inline apenas numa lista fechada de
+  tipos — SVG e HTML sempre vão como download, nunca renderizados no origin
+  do app.
 - **SSH (`ssh_enabled`)**: desligado por padrão. Quando ligado, é root
   completo no container — mesmo nível de acesso que o add-on já tem
   (`full_access` + `SYS_ADMIN`), então não é um privilégio novo, só um jeito
@@ -244,7 +289,8 @@ Transparência sobre o que este add-on pede e por quê:
 
 ## Dados persistentes
 
-Usuários, senhas e configurações do app ficam em `/data` — essa pasta é
+Usuários, senhas, log de auditoria, links de compartilhamento e configurações
+do app ficam em `/data` — essa pasta é
 própria de cada add-on, sobrevive a atualizações/reinstalações, e **entra no
 backup do Home Assistant quando este add-on é selecionado** (backup completo
 ou parcial marcando o add-on).

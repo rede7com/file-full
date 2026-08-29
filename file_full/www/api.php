@@ -1,8 +1,9 @@
 <?php
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/auth.php';
 
+send_security_headers(false);
 require_login_json();
 
 // Proteção CSRF: todo POST (as únicas ações que alteram estado) precisa
@@ -21,7 +22,7 @@ $action = $_REQUEST['action'] ?? '';
 $isViewer = !is_admin();
 
 // Ações que exigem privilégio de escrita (bloqueadas para role "viewer")
-$writeActions = ['mkdir', 'rename', 'delete', 'copy', 'move', 'upload', 'zip', 'unzip', 'chmod', 'update_settings', 'save_file', 'create_file', 'format_disk', 'save_addon_options', 'restart_addon', 'create_user', 'delete_user'];
+$writeActions = ['mkdir', 'rename', 'delete', 'delete_permanent', 'copy', 'move', 'upload', 'zip', 'unzip', 'chmod', 'update_settings', 'save_file', 'create_file', 'format_disk', 'save_addon_options', 'restart_addon', 'create_user', 'delete_user', 'trash_restore', 'trash_purge', 'trash_empty', 'create_share', 'revoke_share'];
 if (in_array($action, $writeActions, true) && $isViewer) {
     json_response(['error' => 'Seu usuário tem permissão apenas de visualização.'], 403);
 }
@@ -35,23 +36,45 @@ switch ($action) {
         $limit = (int) ($_GET['limit'] ?? LIST_DEFAULT_PAGE_SIZE);
         $limit = max(1, min($limit, LIST_MAX_PAGE_SIZE));
 
+        $sort = in_array($_GET['sort'] ?? '', ['name', 'size', 'modified'], true) ? $_GET['sort'] : 'name';
+        $desc = ($_GET['desc'] ?? '') === '1';
+
         $dir = safe_path($rel);
         if (!$dir || !is_dir($dir)) json_response(['error' => 'Pasta não encontrada.'], 404);
 
         // 1ª passada: só nome + is_dir (barato — sem filesize/filemtime/fileperms).
         // Precisa ser sobre a listagem inteira pra manter a ordenação global
-        // "pastas primeiro, depois alfabética" correta entre páginas — do
-        // contrário paginar intercalaria pastas e arquivos entre uma página e
-        // outra.
+        // correta entre páginas — do contrário paginar intercalaria pastas e
+        // arquivos entre uma página e outra.
+        //
+        // Ordenar por tamanho ou data exige estatar TODAS as entradas, não só
+        // a página: é um custo real em pasta gigante, mas é o único jeito de a
+        // ordenação valer pra listagem inteira em vez de só pro lote visível.
+        // Por nome (o padrão) o caminho barato continua valendo.
+        $needsStatAll = $sort !== 'name';
         $entries = [];
         foreach (scandir($dir) as $name) {
             if ($name === '.' || $name === '..') continue;
+            if ($name === TRASH_DIRNAME) continue; // a lixeira tem tela própria
             if (!$showHidden && $name[0] === '.') continue; // oculta arquivos de sistema (.htaccess, .gitkeep etc.)
-            $entries[] = ['name' => $name, 'is_dir' => is_dir($dir . '/' . $name)];
+            $full = $dir . '/' . $name;
+            $entry = ['name' => $name, 'is_dir' => is_dir($full)];
+            if ($needsStatAll) {
+                $entry['size'] = $entry['is_dir'] ? -1 : (@filesize($full) ?: 0);
+                $entry['modified'] = @filemtime($full) ?: 0;
+            }
+            $entries[] = $entry;
         }
-        usort($entries, function ($a, $b) {
+
+        usort($entries, function ($a, $b) use ($sort, $desc) {
+            // Pastas sempre antes de arquivos, em qualquer ordenação — é o que
+            // as pessoas esperam de um gerenciador de arquivos.
             if ($a['is_dir'] !== $b['is_dir']) return $a['is_dir'] ? -1 : 1;
-            return strcasecmp($a['name'], $b['name']);
+            $cmp = $sort === 'name'
+                ? strcasecmp($a['name'], $b['name'])
+                : ($a[$sort] <=> $b[$sort]);
+            if ($cmp === 0) $cmp = strcasecmp($a['name'], $b['name']);
+            return $desc ? -$cmp : $cmp;
         });
 
         $total = count($entries);
@@ -75,6 +98,8 @@ switch ($action) {
                 'is_image' => !$isDir && is_image_file($name),
                 'ext' => $isDir ? null : strtolower(pathinfo($name, PATHINFO_EXTENSION)),
                 'hidden' => $name[0] === '.',
+                'preview' => $isDir ? 'none' : preview_kind($name),
+                'is_mount' => is_mount_level_item($full),
             ];
         }
 
@@ -85,6 +110,8 @@ switch ($action) {
             'total' => $total,
             'offset' => $offset,
             'limit' => $limit,
+            'sort' => $sort,
+            'desc' => $desc,
             'has_more' => ($offset + count($items)) < $total,
         ]);
     }
@@ -98,6 +125,7 @@ switch ($action) {
         }
         $name = unique_name($dir, $name);
         if (!mkdir($dir . '/' . $name, 0755)) json_response(['error' => 'Falha ao criar pasta.'], 500);
+        audit_log('mkdir', ['path' => relative_path($dir . '/' . $name)]);
         json_response(['ok' => true, 'name' => $name]);
     }
 
@@ -108,21 +136,86 @@ switch ($action) {
         if (!$full || !file_exists($full) || $newName === '' || strpbrk($newName, '/\\') !== false) {
             json_response(['error' => 'Dados inválidos.'], 400);
         }
+        if ($newName === '.' || $newName === '..') json_response(['error' => 'Nome inválido.'], 400);
+        if (is_mount_level_item($full)) {
+            json_response(['error' => 'Este item é um disco/pasta montada — renomeie pelo nome do disco, não por aqui.'], 400);
+        }
         $dest = dirname($full) . '/' . $newName;
         if (file_exists($dest)) json_response(['error' => 'Já existe um item com esse nome.'], 409);
         if (!rename($full, $dest)) json_response(['error' => 'Falha ao renomear.'], 500);
+        audit_log('rename', ['path' => relative_path($full), 'to' => $newName]);
         json_response(['ok' => true]);
     }
 
     case 'delete': {
+        // Excluir agora MOVE pra lixeira do volume, em vez de apagar de vez.
+        // A exclusão definitiva existe à parte (delete_permanent / a tela da
+        // Lixeira) — antes um clique errado era irreversível e sem rastro.
+        $paths = $_POST['paths'] ?? [];
+        if (!is_array($paths) || empty($paths)) json_response(['error' => 'Nenhum item selecionado.'], 400);
+        $failed = [];
+        $trashed = [];
+        foreach ($paths as $rel) {
+            $full = safe_path($rel);
+            // Ponto de montagem é o disco em si: apagar seu conteúdo por aqui
+            // (ou o próprio diretório) nunca é o que a pessoa quis dizer.
+            if (!$full || !file_exists($full) || is_mount_level_item($full) || is_in_trash($full)) {
+                $failed[] = $rel;
+                continue;
+            }
+            $id = move_to_trash($full);
+            if ($id === null) $failed[] = $rel; else $trashed[] = $id;
+        }
+        audit_log('delete', ['paths' => $paths, 'trashed' => count($trashed), 'failed' => count($failed)], empty($failed));
+        purge_expired_trash();
+        json_response(['ok' => empty($failed), 'failed' => $failed, 'trashed' => count($trashed)]);
+    }
+
+    case 'delete_permanent': {
+        require_admin_json();
         $paths = $_POST['paths'] ?? [];
         if (!is_array($paths) || empty($paths)) json_response(['error' => 'Nenhum item selecionado.'], 400);
         $failed = [];
         foreach ($paths as $rel) {
             $full = safe_path($rel);
-            if (!$full || !file_exists($full) || !recursive_delete($full)) $failed[] = $rel;
+            if (!$full || !file_exists($full) || is_mount_level_item($full) || !recursive_delete($full)) $failed[] = $rel;
         }
+        audit_log('delete_permanent', ['paths' => $paths, 'failed' => count($failed)], empty($failed));
         json_response(['ok' => empty($failed), 'failed' => $failed]);
+    }
+
+    case 'trash_list': {
+        purge_expired_trash();
+        $settings = load_settings();
+        json_response([
+            'items' => list_trash(),
+            'retention_days' => (int) ($settings['trash_retention_days'] ?? TRASH_RETENTION_DAYS_DEFAULT),
+        ]);
+    }
+
+    case 'trash_restore': {
+        $result = restore_from_trash($_POST['id'] ?? '');
+        audit_log('trash_restore', ['id' => $_POST['id'] ?? '', 'to' => $result['restored_to'] ?? null], $result['ok']);
+        if (!$result['ok']) json_response(['error' => $result['error']], 400);
+        json_response($result);
+    }
+
+    case 'trash_purge': {
+        $id = $_POST['id'] ?? '';
+        $ok = purge_trash_item($id);
+        audit_log('trash_purge', ['id' => $id], $ok);
+        if (!$ok) json_response(['error' => 'Item não encontrado na lixeira.'], 404);
+        json_response(['ok' => true]);
+    }
+
+    case 'trash_empty': {
+        require_admin_json();
+        $count = 0;
+        foreach (list_trash() as $item) {
+            if (purge_trash_item($item['id'])) $count++;
+        }
+        audit_log('trash_empty', ['removed' => $count]);
+        json_response(['ok' => true, 'removed' => $count]);
     }
 
     case 'copy':
@@ -143,6 +236,7 @@ switch ($action) {
             $ok = $action === 'copy' ? recursive_copy($full, $target) : rename($full, $target);
             if (!$ok) $failed[] = $rel;
         }
+        audit_log($action, ['paths' => $paths, 'dest' => relative_path($destDir), 'failed' => count($failed)], empty($failed));
         json_response(['ok' => empty($failed), 'failed' => $failed]);
     }
 
@@ -185,6 +279,7 @@ switch ($action) {
             }
         }
 
+        audit_log('upload', ['dest' => relative_path($dir), 'saved' => count($saved), 'failed' => count($failed)], empty($failed));
         json_response(['ok' => empty($failed), 'saved' => $saved, 'failed' => $failed]);
     }
 
@@ -227,6 +322,7 @@ switch ($action) {
             }
         }
         $zip->close();
+        audit_log('zip', ['name' => $zipName, 'dest' => relative_path($destDir), 'items' => count($paths)]);
         json_response(['ok' => true, 'name' => $zipName]);
     }
 
@@ -242,16 +338,31 @@ switch ($action) {
         $zip = new ZipArchive();
         if ($zip->open($full) !== true) json_response(['error' => 'Falha ao abrir ZIP.'], 500);
 
-        // Proteção contra path traversal dentro do próprio ZIP (zip slip)
+        // Proteção contra path traversal dentro do próprio ZIP (zip slip).
+        // A checagem anterior era `strpos($entry, '..') !== false`: barrava
+        // nomes legítimos ("foto..jpg", "backup..2024") e ao mesmo tempo
+        // deixava passar caminho absoluto. Aqui cada entrada é normalizada
+        // segmento a segmento — do mesmo jeito que safe_path faz — e só é
+        // aceita se o resultado continuar sendo um caminho relativo pra
+        // dentro da pasta de destino.
         for ($i = 0; $i < $zip->numFiles; $i++) {
-            $entry = $zip->getNameIndex($i);
-            if (strpos($entry, '..') !== false) {
+            $entry = str_replace('\\', '/', (string) $zip->getNameIndex($i));
+            $bad = $entry === '' || $entry[0] === '/' || preg_match('#^[A-Za-z]:#', $entry);
+            $depth = 0;
+            foreach (explode('/', $entry) as $segment) {
+                if ($segment === '' || $segment === '.') continue;
+                if ($segment === '..') { $depth--; if ($depth < 0) { $bad = true; break; } continue; }
+                $depth++;
+            }
+            if ($bad) {
                 $zip->close();
-                json_response(['error' => 'ZIP contém caminhos inválidos.'], 400);
+                recursive_delete($destDir);
+                json_response(['error' => 'ZIP contém caminhos inválidos (aponta pra fora da pasta de destino).'], 400);
             }
         }
         $zip->extractTo($destDir);
         $zip->close();
+        audit_log('unzip', ['path' => relative_path($full), 'to' => relative_path($destDir)]);
         json_response(['ok' => true, 'folder' => relative_path($destDir)]);
     }
 
@@ -285,6 +396,7 @@ switch ($action) {
             json_response(['error' => 'Conteúdo excede o limite do editor (' . human_filesize(MAX_EDIT_SIZE) . ').'], 413);
         }
         if (file_put_contents($full, $content) === false) json_response(['error' => 'Falha ao salvar arquivo.'], 500);
+        audit_log('save_file', ['path' => relative_path($full), 'bytes' => strlen($content)]);
         json_response(['ok' => true]);
     }
 
@@ -296,7 +408,9 @@ switch ($action) {
             json_response(['error' => 'Dados inválidos.'], 400);
         }
         $name = unique_name($dir, $name);
+        if (is_extension_blocked($name)) json_response(['error' => 'Extensão bloqueada nas configurações.'], 400);
         if (file_put_contents($dir . '/' . $name, '') === false) json_response(['error' => 'Falha ao criar arquivo.'], 500);
+        audit_log('create_file', ['path' => relative_path($dir . '/' . $name)]);
         json_response(['ok' => true, 'name' => $name]);
     }
 
@@ -388,6 +502,7 @@ switch ($action) {
             }
         }
 
+        audit_log('format_disk', ['device' => $devicePath, 'fstype' => $fstype, 'label' => $label]);
         json_response(['ok' => true, 'output' => implode("\n", $output), 'mount' => $mountInfo]);
     }
 
@@ -490,8 +605,12 @@ switch ($action) {
 
     case 'get_settings': {
         require_admin_json();
+        $settings = load_settings();
         json_response([
-            'settings' => load_settings(),
+            'settings' => [
+                'blocked_extensions' => $settings['blocked_extensions'] ?? DEFAULT_EXTRA_BLOCKED_EXTENSIONS,
+                'trash_retention_days' => (int) ($settings['trash_retention_days'] ?? TRASH_RETENTION_DAYS_DEFAULT),
+            ],
             'always_blocked' => ALWAYS_BLOCKED_EXTENSIONS,
         ]);
     }
@@ -503,8 +622,47 @@ switch ($action) {
             return strtolower(trim($e, ". \t\n\r"));
         }, explode(',', $raw)));
         $list = array_values(array_unique($list));
-        save_settings(['blocked_extensions' => $list]);
-        json_response(['ok' => true, 'blocked_extensions' => $list]);
+        $retention = max(0, min(365, (int) ($_POST['trash_retention_days'] ?? TRASH_RETENTION_DAYS_DEFAULT)));
+        save_settings(['blocked_extensions' => $list, 'trash_retention_days' => $retention]);
+        audit_log('update_settings', ['blocked_extensions' => $list, 'trash_retention_days' => $retention]);
+        json_response(['ok' => true, 'blocked_extensions' => $list, 'trash_retention_days' => $retention]);
+    }
+
+    // ---- Links de compartilhamento temporários ----------------------------
+
+    case 'create_share': {
+        require_admin_json();
+        $rel = $_POST['path'] ?? '';
+        $hours = max(1, min(720, (int) ($_POST['hours'] ?? 24)));
+        $full = safe_path($rel);
+        if (!$full || !is_file($full)) {
+            json_response(['error' => 'Só é possível compartilhar arquivos (não pastas).'], 400);
+        }
+        $share = create_share(relative_path($full), $hours * 3600);
+        audit_log('create_share', ['path' => relative_path($full), 'hours' => $hours]);
+        json_response(['ok' => true, 'token' => $share['token'], 'expires_at' => $share['expires_at']]);
+    }
+
+    case 'list_shares': {
+        require_admin_json();
+        // O token completo volta de propósito: é o que a tela precisa pra
+        // remontar o link copiável de um compartilhamento já criado.
+        json_response(['shares' => prune_shares()]);
+    }
+
+    case 'revoke_share': {
+        require_admin_json();
+        $token = $_POST['token'] ?? '';
+        $ok = delete_share($token);
+        audit_log('revoke_share', ['token' => substr($token, 0, 8) . '…'], $ok);
+        if (!$ok) json_response(['error' => 'Link não encontrado.'], 404);
+        json_response(['ok' => true]);
+    }
+
+    case 'audit_log': {
+        require_admin_json();
+        $limit = max(1, min(1000, (int) ($_GET['limit'] ?? 200)));
+        json_response(['entries' => read_audit_log($limit)]);
     }
 
     case 'get_addon_options': {
@@ -532,6 +690,7 @@ switch ($action) {
             }
         }
 
+        audit_log('save_addon_options', ['keys' => array_keys($incoming)]);
         if (!save_addon_options($incoming)) {
             json_response(['error' => 'Falha ao salvar. Verifique se hassio_api: true está no config.yaml e se o add-on foi reconstruído.'], 500);
         }
@@ -555,6 +714,7 @@ switch ($action) {
         // ativar". Não reinicia sozinho — o front-end mostra a chave privada
         // pra download antes de reiniciar, pra nunca reiniciar sem o usuário
         // ter tido a chance de guardá-la.
+        audit_log('ssh_generate_keypair', []);
         if (!save_addon_options(['ssh_authorized_key' => $kp['public'], 'ssh_enabled' => true])) {
             json_response(['error' => 'Chave gerada, mas falhou ao salvar nas opções do add-on.'], 500);
         }
@@ -582,6 +742,7 @@ switch ($action) {
         if (!create_user($username, $password, $role)) {
             json_response(['error' => 'Já existe um usuário com esse nome.'], 409);
         }
+        audit_log('create_user', ['username' => $username, 'role' => $role]);
         json_response(['ok' => true]);
     }
 
@@ -598,6 +759,7 @@ switch ($action) {
             json_response(['error' => 'Precisa sobrar ao menos um administrador.'], 400);
         }
         if (!delete_user($username)) json_response(['error' => 'Usuário não encontrado.'], 404);
+        audit_log('delete_user', ['username' => $username]);
         json_response(['ok' => true]);
     }
 
@@ -610,6 +772,7 @@ switch ($action) {
             json_response(['error' => 'Dados inválidos.'], 400);
         }
         if (!chmod($full, octdec($mode))) json_response(['error' => 'Falha ao alterar permissões.'], 500);
+        audit_log('chmod', ['path' => relative_path($full), 'mode' => $mode]);
         json_response(['ok' => true]);
     }
 

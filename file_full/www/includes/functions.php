@@ -7,6 +7,17 @@
  * Resolve um caminho relativo (vindo do cliente) para um caminho absoluto seguro
  * dentro de BASE_DIR. Bloqueia qualquer tentativa de path traversal (../).
  * Retorna null se o caminho for inválido ou estiver fora de BASE_DIR.
+ *
+ * Normalizar os segmentos ".." NÃO basta sozinho: um symlink em qualquer
+ * componente do caminho pode apontar para fora de BASE_DIR, e symlinks assim
+ * são criáveis por quem tem acesso SMB ou SSH ao mesmo disco. Por isso o
+ * caminho é sempre confirmado com realpath():
+ *
+ *  - se o alvo já existe, realpath() resolve a cadeia inteira de symlinks;
+ *  - se ainda não existe (upload, mkdir, novo arquivo), resolvemos o
+ *    DIRETÓRIO PAI mais próximo que exista e conferimos ele — sem isso, um
+ *    upload em "HD/atalho_pra_fora/arquivo.txt" gravaria fora de BASE_DIR,
+ *    porque o realpath do caminho completo falha e o valor cru passaria.
  */
 function safe_path(string $relative): ?string {
     $relative = str_replace('\\', '/', $relative);
@@ -25,18 +36,33 @@ function safe_path(string $relative): ?string {
     $normalized = implode('/', $parts);
     $full = $normalized === '' ? BASE_DIR : BASE_DIR . '/' . $normalized;
 
-    // Como todo segmento ".." já foi removido acima, $full está garantidamente
-    // dentro de BASE_DIR só pela normalização — não depende de o caminho já existir.
-    // Se o caminho existir de fato (arquivo/pasta ou até um symlink), confirmamos
-    // com realpath() que ele continua fisicamente dentro de BASE_DIR (proteção extra
-    // contra symlinks que apontem para fora).
+    // Caminho já existente: realpath resolve symlinks em todos os componentes.
     $resolved = realpath($full);
     if ($resolved !== false) {
-        if ($resolved !== BASE_DIR && strpos($resolved, BASE_DIR . '/') !== 0) return null;
-        return $resolved;
+        return path_is_inside_base($resolved) ? $resolved : null;
     }
 
-    return $full;
+    // Caminho ainda inexistente: sobe até o primeiro ancestral que exista e
+    // valida ELE. O que ainda não existe não pode ser symlink, então garantir
+    // que o ancestral real está dentro de BASE_DIR garante o caminho todo.
+    $probe = $full;
+    $tail = [];
+    while (true) {
+        $parent = dirname($probe);
+        if ($parent === $probe) return null; // chegou em "/" sem achar âncora válida
+        array_unshift($tail, basename($probe));
+        $realParent = realpath($parent);
+        if ($realParent !== false) {
+            if (!path_is_inside_base($realParent)) return null;
+            return $realParent . '/' . implode('/', $tail);
+        }
+        $probe = $parent;
+    }
+}
+
+/** true se um caminho JÁ RESOLVIDO (realpath) está dentro de BASE_DIR */
+function path_is_inside_base(string $resolved): bool {
+    return $resolved === BASE_DIR || strpos($resolved, BASE_DIR . '/') === 0;
 }
 
 /** Retorna o caminho relativo (para exibição/URLs) a partir de um caminho absoluto */
@@ -82,8 +108,18 @@ function is_image_file(string $filename): bool {
     return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true);
 }
 
-/** Copia recursivamente um arquivo ou diretório */
+/**
+ * Copia recursivamente um arquivo ou diretório.
+ *
+ * Symlink é recriado como symlink, nunca seguido: seguir um link que aponte
+ * pra fora de BASE_DIR copiaria conteúdo de fora pra dentro do gerenciador
+ * (e um link apontando pra dentro de si mesmo causaria recursão infinita).
+ */
 function recursive_copy(string $src, string $dst): bool {
+    if (is_link($src)) {
+        $target = @readlink($src);
+        return $target !== false && @symlink($target, $dst);
+    }
     if (is_dir($src)) {
         if (!is_dir($dst)) mkdir($dst, 0755, true);
         $items = scandir($src);
@@ -107,19 +143,6 @@ function recursive_delete(string $path): bool {
         return rmdir($path);
     }
     return unlink($path);
-}
-
-/** Calcula o tamanho total de um diretório (recursivo) */
-function dir_size(string $path): int {
-    $size = 0;
-    $items = @scandir($path);
-    if (!$items) return 0;
-    foreach ($items as $item) {
-        if ($item === '.' || $item === '..') continue;
-        $full = $path . '/' . $item;
-        $size += is_dir($full) ? dir_size($full) : filesize($full);
-    }
-    return $size;
 }
 
 /** Gera um nome único caso já exista arquivo/pasta com o mesmo nome no destino */
@@ -564,5 +587,399 @@ function generate_ssh_keypair(): ?array {
     @rmdir($dir);
 
     return ['private' => $private, 'public' => $public];
+}
+
+// =============================================================================
+// Cabeçalhos de segurança
+// =============================================================================
+
+/**
+ * Cabeçalhos aplicados a toda resposta do app.
+ *
+ * A Content-Security-Policy é a rede de proteção contra XSS: mesmo que algum
+ * dado vindo do disco escape do escapamento no JS, script injetado não roda
+ * porque não carrega o nonce deste request (ver CSP_NONCE em config.php).
+ *
+ * - script-src: só arquivos do próprio app + o inline com o nonce do request.
+ *   Sem 'unsafe-inline' de propósito.
+ * - style-src aceita 'unsafe-inline' porque a interface usa muito style=""
+ *   direto no markup; isso não reabre execução de script.
+ * - frame-ancestors 'self' permite o iframe do Ingress (servido pelo mesmo
+ *   origin do HA) e barra qualquer outro site de embutir o app (clickjacking).
+ * - img-src/media-src aceitam blob: e data: por causa do visualizador e das
+ *   miniaturas geradas no cliente.
+ *
+ * $html=false (api.php, download.php, thumb.php) manda só o essencial: numa
+ * resposta que não é documento, uma CSP completa não acrescenta nada.
+ */
+function send_security_headers(bool $html = true): void {
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: no-referrer');
+    header('X-Frame-Options: SAMEORIGIN'); // navegadores antigos, sem CSP level 2
+    if (!$html) return;
+
+    header("Content-Security-Policy: "
+        . "default-src 'self'; "
+        . "script-src 'self' 'nonce-" . CSP_NONCE . "'; "
+        . "style-src 'self' 'unsafe-inline'; "
+        . "img-src 'self' data: blob:; "
+        . "media-src 'self' blob:; "
+        . "frame-src 'self' blob:; "
+        . "connect-src 'self'; "
+        . "font-src 'self'; "
+        . "object-src 'none'; "
+        . "base-uri 'none'; "
+        . "form-action 'self'; "
+        . "frame-ancestors 'self'");
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+}
+
+/**
+ * Monta um Content-Disposition seguro. Nome de arquivo no Linux pode conter
+ * aspas e até quebra de linha — interpolar isso direto no cabeçalho permitia
+ * injetar cabeçalhos arbitrários na resposta (HTTP response splitting).
+ * Aqui o nome vai sempre percent-encoded na forma RFC 5987 (filename*), com
+ * um fallback ASCII sanitizado pros clientes que não a entendem.
+ */
+function content_disposition(string $filename, string $type = 'attachment'): string {
+    $ascii = preg_replace('/[^A-Za-z0-9._\- ]/', '_', $filename);
+    if ($ascii === '' || $ascii === null) $ascii = 'arquivo';
+    return $type . '; filename="' . $ascii . '"; filename*=UTF-8\'\'' . rawurlencode($filename);
+}
+
+// =============================================================================
+// Log de auditoria
+// =============================================================================
+
+/**
+ * Registra uma ação de escrita em /data/audit.log (uma linha JSON por ação).
+ * Sem isso não havia como saber quem apagou/moveu o quê — o app tem vários
+ * usuários, mas até aqui nenhum rastro. Rotaciona sozinho ao passar do teto,
+ * mantendo um arquivo .1 anterior, pra nunca crescer sem limite dentro de
+ * /data (que entra no backup do HA).
+ */
+function audit_log(string $action, array $details = [], bool $ok = true): void {
+    if (@filesize(AUDIT_LOG_FILE) > AUDIT_LOG_MAX_BYTES) {
+        @rename(AUDIT_LOG_FILE, AUDIT_LOG_FILE . '.1');
+    }
+    $entry = [
+        'ts' => date('c'),
+        'user' => $_SESSION['user']['username'] ?? '-',
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? '-',
+        'action' => $action,
+        'ok' => $ok,
+    ] + $details;
+    @file_put_contents(
+        AUDIT_LOG_FILE,
+        json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n",
+        FILE_APPEND | LOCK_EX
+    );
+}
+
+/** Últimas $limit entradas do log de auditoria, mais recentes primeiro. */
+function read_audit_log(int $limit = 200): array {
+    $entries = [];
+    foreach ([AUDIT_LOG_FILE, AUDIT_LOG_FILE . '.1'] as $file) {
+        if (!is_file($file)) continue;
+        $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        foreach (array_reverse($lines) as $line) {
+            $decoded = json_decode($line, true);
+            if (is_array($decoded)) $entries[] = $decoded;
+            if (count($entries) >= $limit) return $entries;
+        }
+    }
+    return $entries;
+}
+
+// =============================================================================
+// Lixeira
+// =============================================================================
+
+/**
+ * Volume de topo (disco/pasta exposta) a que um caminho pertence — é o
+ * primeiro segmento depois de BASE_DIR. A lixeira vive dentro do próprio
+ * volume justamente pra que excluir seja um rename() no mesmo filesystem.
+ * Retorna null para o próprio BASE_DIR (a raiz não pertence a volume nenhum).
+ */
+function volume_root_of(string $absolute): ?string {
+    $rel = relative_path($absolute);
+    if ($rel === '') return null;
+    $first = explode('/', $rel)[0];
+    return BASE_DIR . '/' . $first;
+}
+
+/** true se o caminho é um item de primeiro nível (ponto de montagem de disco) */
+function is_mount_level_item(string $absolute): bool {
+    $rel = relative_path($absolute);
+    return $rel !== '' && strpos($rel, '/') === false;
+}
+
+function trash_dir_for(string $absolute): ?string {
+    $volume = volume_root_of($absolute);
+    return $volume === null ? null : $volume . '/' . TRASH_DIRNAME;
+}
+
+/** true se o caminho está dentro de alguma lixeira (não deve aparecer na listagem) */
+function is_in_trash(string $absolute): bool {
+    return strpos(relative_path($absolute) . '/', '/' . TRASH_DIRNAME . '/') !== false
+        || substr(relative_path($absolute), -strlen(TRASH_DIRNAME)) === TRASH_DIRNAME;
+}
+
+/**
+ * Move um item para a lixeira do volume dele, guardando os metadados
+ * necessários pra restaurar depois (caminho original, quem excluiu, quando).
+ * Retorna o id gerado, ou null se não deu.
+ */
+function move_to_trash(string $absolute): ?string {
+    $trash = trash_dir_for($absolute);
+    if ($trash === null) return null;
+
+    $id = date('Ymd_His') . '_' . bin2hex(random_bytes(4));
+    $itemsDir = $trash . '/items/' . $id;
+    $metaDir = $trash . '/meta';
+    if (!is_dir($itemsDir) && !mkdir($itemsDir, 0755, true)) return null;
+    if (!is_dir($metaDir) && !mkdir($metaDir, 0755, true)) return null;
+
+    $name = basename($absolute);
+    $isDir = is_dir($absolute) && !is_link($absolute);
+    if (!@rename($absolute, $itemsDir . '/' . $name)) {
+        @rmdir($itemsDir);
+        return null;
+    }
+
+    @file_put_contents($metaDir . '/' . $id . '.json', json_encode([
+        'id' => $id,
+        'name' => $name,
+        'original_path' => relative_path($absolute),
+        'is_dir' => $isDir,
+        'deleted_at' => time(),
+        'deleted_by' => $_SESSION['user']['username'] ?? '-',
+    ], JSON_UNESCAPED_UNICODE));
+
+    return $id;
+}
+
+/** Lista o conteúdo das lixeiras de todos os volumes, mais recentes primeiro. */
+function list_trash(): array {
+    $entries = [];
+    foreach (glob(BASE_DIR . '/*/' . TRASH_DIRNAME . '/meta/*.json') ?: [] as $metaFile) {
+        $meta = json_decode((string) @file_get_contents($metaFile), true);
+        if (!is_array($meta) || empty($meta['id'])) continue;
+        $itemPath = dirname(dirname($metaFile)) . '/items/' . $meta['id'] . '/' . $meta['name'];
+        if (!file_exists($itemPath)) continue;
+        $meta['size'] = $meta['is_dir'] ? null : @filesize($itemPath);
+        $meta['volume'] = basename(dirname(dirname(dirname($metaFile))));
+        $entries[] = $meta;
+    }
+    usort($entries, fn($a, $b) => ($b['deleted_at'] ?? 0) <=> ($a['deleted_at'] ?? 0));
+    return $entries;
+}
+
+/** Localiza os caminhos físicos de um item da lixeira pelo id. */
+function find_trash_entry(string $id): ?array {
+    if (!preg_match('/^[0-9]{8}_[0-9]{6}_[0-9a-f]{8}$/', $id)) return null;
+    foreach (glob(BASE_DIR . '/*/' . TRASH_DIRNAME . '/meta/' . $id . '.json') ?: [] as $metaFile) {
+        $meta = json_decode((string) @file_get_contents($metaFile), true);
+        if (!is_array($meta)) continue;
+        $trash = dirname(dirname($metaFile));
+        return [
+            'meta' => $meta,
+            'meta_file' => $metaFile,
+            'item_dir' => $trash . '/items/' . $id,
+            'item_path' => $trash . '/items/' . $id . '/' . $meta['name'],
+        ];
+    }
+    return null;
+}
+
+/**
+ * Devolve um item da lixeira ao lugar de origem. Se o caminho original não
+ * existir mais (a pasta que continha o arquivo foi apagada), recria a árvore;
+ * se já existir algo com o mesmo nome, restaura com nome único em vez de
+ * sobrescrever.
+ */
+function restore_from_trash(string $id): array {
+    $entry = find_trash_entry($id);
+    if ($entry === null) return ['ok' => false, 'error' => 'Item não encontrado na lixeira.'];
+
+    $target = safe_path($entry['meta']['original_path'] ?? '');
+    if (!$target) return ['ok' => false, 'error' => 'Caminho original inválido.'];
+
+    $destDir = dirname($target);
+    if (!is_dir($destDir) && !mkdir($destDir, 0755, true)) {
+        return ['ok' => false, 'error' => 'Não foi possível recriar a pasta de origem.'];
+    }
+    $finalName = unique_name($destDir, basename($target));
+    if (!@rename($entry['item_path'], $destDir . '/' . $finalName)) {
+        return ['ok' => false, 'error' => 'Falha ao restaurar o item.'];
+    }
+    @unlink($entry['meta_file']);
+    @rmdir($entry['item_dir']);
+    return ['ok' => true, 'restored_to' => relative_path($destDir . '/' . $finalName)];
+}
+
+/** Apaga de vez um item da lixeira. */
+function purge_trash_item(string $id): bool {
+    $entry = find_trash_entry($id);
+    if ($entry === null) return false;
+    recursive_delete($entry['item_dir']);
+    @unlink($entry['meta_file']);
+    return true;
+}
+
+/**
+ * Expurga itens da lixeira mais velhos que a retenção configurada. Chamado
+ * oportunisticamente (ao excluir e ao abrir a lixeira) em vez de por um
+ * serviço em background — não vale um processo a mais no container só pra
+ * isso, e a lixeira só cresce justamente quando alguém está usando o app.
+ */
+function purge_expired_trash(): int {
+    $settings = load_settings();
+    $days = (int) ($settings['trash_retention_days'] ?? TRASH_RETENTION_DAYS_DEFAULT);
+    if ($days <= 0) return 0; // 0 = manter pra sempre
+    $cutoff = time() - ($days * 86400);
+    $removed = 0;
+    foreach (list_trash() as $item) {
+        if (($item['deleted_at'] ?? 0) < $cutoff && purge_trash_item($item['id'])) $removed++;
+    }
+    return $removed;
+}
+
+// =============================================================================
+// Links de compartilhamento temporários
+// =============================================================================
+
+function load_shares(): array {
+    $data = json_decode((string) @file_get_contents(SHARES_FILE), true);
+    return is_array($data) ? $data : [];
+}
+
+function save_shares(array $shares): bool {
+    return @file_put_contents(SHARES_FILE, json_encode(array_values($shares), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX) !== false;
+}
+
+/** Remove da lista os links já vencidos (chamado a cada leitura/escrita) */
+function prune_shares(): array {
+    $shares = load_shares();
+    $alive = array_values(array_filter($shares, fn($s) => ($s['expires_at'] ?? 0) > time()));
+    if (count($alive) !== count($shares)) save_shares($alive);
+    return $alive;
+}
+
+/**
+ * Cria um link temporário para um arquivo. Só arquivo, nunca pasta: um link
+ * público para uma pasta inteira significaria montar um ZIP arbitrariamente
+ * grande sob demanda pra quem não está autenticado.
+ */
+function create_share(string $relPath, int $ttlSeconds): array {
+    $ttlSeconds = max(60, min($ttlSeconds, SHARE_MAX_TTL_SECONDS));
+    $token = bin2hex(random_bytes(24));
+    $shares = prune_shares();
+    $shares[] = [
+        'token' => $token,
+        'path' => $relPath,
+        'created_at' => time(),
+        'created_by' => $_SESSION['user']['username'] ?? '-',
+        'expires_at' => time() + $ttlSeconds,
+        'downloads' => 0,
+    ];
+    save_shares($shares);
+    return ['token' => $token, 'expires_at' => time() + $ttlSeconds];
+}
+
+/** Busca um link válido pelo token, em tempo constante contra o token guardado. */
+function find_share(string $token): ?array {
+    if (!preg_match('/^[0-9a-f]{48}$/', $token)) return null;
+    foreach (prune_shares() as $share) {
+        if (hash_equals($share['token'], $token)) return $share;
+    }
+    return null;
+}
+
+function delete_share(string $token): bool {
+    $shares = prune_shares();
+    $filtered = array_values(array_filter($shares, fn($s) => !hash_equals($s['token'], $token)));
+    if (count($filtered) === count($shares)) return false;
+    return save_shares($filtered);
+}
+
+function increment_share_downloads(string $token): void {
+    $shares = prune_shares();
+    foreach ($shares as &$s) {
+        if (hash_equals($s['token'], $token)) { $s['downloads'] = ($s['downloads'] ?? 0) + 1; break; }
+    }
+    unset($s);
+    save_shares($shares);
+}
+
+// =============================================================================
+// Cache de miniaturas
+// =============================================================================
+
+/**
+ * Mantém o cache de miniaturas abaixo do teto, removendo as mais antigas até
+ * sobrar 80% do limite. Ele mora em /data, que ENTRA no backup do HA — sem
+ * poda, navegar por uma biblioteca de fotos grande inchava permanentemente
+ * todo backup gerado dali em diante.
+ */
+function prune_thumb_cache(): void {
+    $files = glob(THUMB_CACHE_DIR . '/*.jpg') ?: [];
+    $total = 0;
+    $stats = [];
+    foreach ($files as $f) {
+        $size = @filesize($f);
+        if ($size === false) continue;
+        $total += $size;
+        $stats[] = ['path' => $f, 'size' => $size, 'time' => @filemtime($f) ?: 0];
+    }
+    if ($total <= THUMB_CACHE_MAX_BYTES) return;
+
+    usort($stats, fn($a, $b) => $a['time'] <=> $b['time']); // mais antigas primeiro
+    $target = (int) (THUMB_CACHE_MAX_BYTES * 0.8);
+    foreach ($stats as $s) {
+        if ($total <= $target) break;
+        if (@unlink($s['path'])) $total -= $s['size'];
+    }
+}
+
+// =============================================================================
+// Tipos de arquivo (visualizador)
+// =============================================================================
+
+/**
+ * Classifica um arquivo pra decidir o que o visualizador embutido faz com ele:
+ * mostrar imagem, tocar vídeo/áudio, embutir PDF, renderizar markdown, abrir
+ * no editor de texto — ou simplesmente oferecer o download.
+ */
+function preview_kind(string $filename): string {
+    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'], true)) return 'image';
+    if (in_array($ext, ['mp4', 'webm', 'ogv', 'mov', 'm4v'], true)) return 'video';
+    if (in_array($ext, ['mp3', 'wav', 'ogg', 'oga', 'flac', 'm4a', 'aac'], true)) return 'audio';
+    if ($ext === 'pdf') return 'pdf';
+    if (in_array($ext, ['md', 'markdown'], true)) return 'markdown';
+    return 'none';
+}
+
+/**
+ * MIME seguro para servir um arquivo inline no visualizador. Só tipos que o
+ * navegador renderiza sem risco de tratar o conteúdo como documento HTML do
+ * nosso próprio origin — SVG fica de fora de propósito (SVG é um documento
+ * que executa script), servido sempre como download.
+ */
+function inline_mime(string $filename): ?string {
+    static $map = [
+        'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
+        'gif' => 'image/gif', 'webp' => 'image/webp', 'bmp' => 'image/bmp',
+        'ico' => 'image/x-icon',
+        'mp4' => 'video/mp4', 'webm' => 'video/webm', 'ogv' => 'video/ogg',
+        'mov' => 'video/quicktime', 'm4v' => 'video/mp4',
+        'mp3' => 'audio/mpeg', 'wav' => 'audio/wav', 'ogg' => 'audio/ogg',
+        'oga' => 'audio/ogg', 'flac' => 'audio/flac', 'm4a' => 'audio/mp4',
+        'aac' => 'audio/aac',
+        'pdf' => 'application/pdf',
+    ];
+    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    return $map[$ext] ?? null;
 }
 

@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/auth.php';
+
+send_security_headers();
 
 if (is_logged_in()) {
     header('Location: index.php');
@@ -11,7 +14,14 @@ $firstRun = !has_any_user();
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if ($firstRun) {
+    // CSRF também no login: sem isso, outro site consegue submeter este
+    // formulário com credenciais conhecidas e deixar a vítima logada numa
+    // conta do atacante (login CSRF), que é como se planta conteúdo numa
+    // sessão que a pessoa acha ser a dela.
+    $sentToken = $_POST['csrf'] ?? '';
+    if (!hash_equals($_SESSION['csrf'] ?? '', $sentToken)) {
+        $error = 'Sessão expirada. Recarregue a página e tente novamente.';
+    } elseif ($firstRun) {
         $username = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
         $confirm = $_POST['confirm'] ?? '';
@@ -28,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $username = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
-        if (is_login_throttled()) {
-            $error = 'Muitas tentativas de login deste endereço. Aguarde alguns minutos e tente novamente.';
+        if (is_login_throttled($username)) {
+            $error = 'Muitas tentativas para este usuário. Aguarde alguns minutos e tente novamente.';
         } elseif (attempt_login($username, $password)) {
             header('Location: index.php');
             exit;
@@ -44,30 +54,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= $firstRun ? 'Configuração inicial' : 'Login' ?> — Gerenciador de Arquivos</title>
-<link rel="stylesheet" href="assets/css/style.css">
+<meta name="color-scheme" content="light dark">
+<title><?= $firstRun ? 'Configuração inicial' : 'Entrar' ?> — Gerenciador de Arquivos</title>
+<link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
 </head>
 <body class="auth-body">
   <div class="auth-card">
-    <h1>📁 Gerenciador de Arquivos</h1>
+    <div class="auth-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="28" height="28"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+    </div>
+    <h1>Gerenciador de Arquivos</h1>
     <?php if ($firstRun): ?>
-      <p class="auth-sub">Primeiro acesso: crie o usuário administrador.</p>
+      <p class="auth-sub">Primeiro acesso — crie o usuário administrador.</p>
     <?php else: ?>
-      <p class="auth-sub">Acesso restrito à equipe.</p>
+      <p class="auth-sub">Acesso restrito.</p>
     <?php endif; ?>
 
     <?php if ($error): ?><div class="alert alert-error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 
     <form method="post" class="auth-form">
-      <label>Usuário</label>
-      <input type="text" name="username" required autofocus>
+      <input type="hidden" name="csrf" value="<?= htmlspecialchars(CSRF_TOKEN) ?>">
 
-      <label>Senha</label>
-      <input type="password" name="password" required minlength="8">
+      <label for="f-user">Usuário</label>
+      <input id="f-user" type="text" name="username" required autofocus autocomplete="username">
+
+      <label for="f-pass">Senha</label>
+      <input id="f-pass" type="password" name="password" required minlength="8"
+             autocomplete="<?= $firstRun ? 'new-password' : 'current-password' ?>">
 
       <?php if ($firstRun): ?>
-        <label>Confirmar senha</label>
-        <input type="password" name="confirm" required minlength="8">
+        <label for="f-conf">Confirmar senha</label>
+        <input id="f-conf" type="password" name="confirm" required minlength="8" autocomplete="new-password">
       <?php endif; ?>
 
       <button type="submit"><?= $firstRun ? 'Criar administrador' : 'Entrar' ?></button>
