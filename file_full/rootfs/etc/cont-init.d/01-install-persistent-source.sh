@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 # ==============================================================================
 # O código do app (www/) fica instalado em /data/www — pasta persistente
 # própria do add-on, que sobrevive a updates E entra no backup do HA quando
@@ -40,8 +41,7 @@ fi
 if mountpoint -q "${WEBROOT}"; then
     bashio::log.info "Webroot já montado em ${WEBROOT}"
 else
-    mount --bind "${PERSIST_WWW}" "${WEBROOT}"
-    if [ $? -eq 0 ]; then
+    if mount --bind "${PERSIST_WWW}" "${WEBROOT}"; then
         bashio::log.info "Webroot montado a partir de ${PERSIST_WWW}."
     else
         bashio::log.warning "Falha ao montar ${PERSIST_WWW} sobre ${WEBROOT}. Usando conteúdo estático da imagem."

@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 # ==============================================================================
 # Monta um ou mais HDs externos por LABEL antes do servidor PHP subir.
 # Cada disco é montado em /mnt/file_full/<label>, de forma que todos
@@ -111,8 +112,7 @@ expose_optional_mount() {
         else
             bashio::log.warning "${flag_name} ativado: expondo ${source_path} em ${target}"
             [ -n "${warning_msg}" ] && bashio::log.warning "${warning_msg}"
-            mount --bind "${source_path}" "${target}"
-            if [ $? -ne 0 ]; then
+            if ! mount --bind "${source_path}" "${target}"; then
                 bashio::log.error "Falha ao expor ${source_path}. Verifique se '${flag_name}' tem o map: correspondente no config.yaml e refaça o rebuild do add-on."
             fi
         fi

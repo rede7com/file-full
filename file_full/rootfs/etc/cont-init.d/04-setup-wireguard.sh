@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 # ==============================================================================
 # Cliente(s) WireGuard: conecta este addon a servidores VPN existentes (ex:
 # vpn2). Os campos vêm direto do .conf que o servidor te deu. Suporta até

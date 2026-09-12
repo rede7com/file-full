@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 # ==============================================================================
 # Configura o smb.conf pros dois usos possíveis do SMB deste add-on — não são
 # mutuamente exclusivos, um container só serve os dois ao mesmo tempo se
@@ -165,8 +166,7 @@ if ${TM_ON}; then
                 bashio::log.error "Disco '${TM_DISK}' não encontrado (${TM_DEVICE}). Confira o nome/UUID em time_machine_disk e se o disco está conectado. Time Machine não será iniciado nesta subida."
                 TM_READY=false
             else
-                mount "${TM_DEVICE}" "${TM_PATH}" 2>&1
-                if [ $? -ne 0 ]; then
+                if ! mount "${TM_DEVICE}" "${TM_PATH}" 2>&1; then
                     bashio::log.error "Falha ao montar '${TM_DISK}'. Time Machine não será iniciado nesta subida."
                     TM_READY=false
                 else

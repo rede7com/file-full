@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 # ==============================================================================
 # Garante que /data existe (pasta persistente própria do add-on — sobrevive
 # a updates e ENTRA no backup do HA quando este add-on é selecionado no

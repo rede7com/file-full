@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 # ==============================================================================
 # SSH real dentro do container: acesso root completo a tudo que o add-on já
 # enxerga — os HDs externos (/mnt/file_full), /config (HA de verdade, mesmo
