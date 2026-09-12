@@ -1,5 +1,16 @@
 # 📋 Histórico de versões
 
+## 2026-1.8.0
+
+- 🔄 **`rsync` adicionado ao add-on.** Faltava pra transferências resumíveis
+  entre o file-full e outras máquinas — `scp` continua funcionando como
+  sempre, mas agora dá pra usar `rsync` também via SSH.
+
+## 2026-1.7.1
+
+- 🐛 Pequenas correções de bugs (limpeza de shellcheck nos scripts de boot,
+  sem mudança de comportamento).
+
 ## 2026-1.7.0
 
 Versão grande: segurança, aparência e recursos novos.
