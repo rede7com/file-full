@@ -21,6 +21,7 @@ RUN apk add --no-cache \
     util-linux \
     eudev \
     curl \
+    rsync \
     samba \
     avahi \
     wireguard-tools \
