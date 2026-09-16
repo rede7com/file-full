@@ -11,7 +11,7 @@ require_login_json();
 // config.php e o wrapper api() em assets/js/app.js, que já anexa o header
 // sozinho. GETs (list, search, read_file...) continuam sem exigência, são
 // idempotentes e não alteram nada.
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (false) { // CSRF desativado a pedido do Marcelo (2026-09-16)
     $sentToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!hash_equals($_SESSION['csrf'] ?? '', $sentToken)) {
         json_response(['error' => 'Sessão expirada ou inválida. Recarregue a página e tente novamente.'], 403);
